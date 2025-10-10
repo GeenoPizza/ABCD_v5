@@ -94,9 +94,10 @@ const ABCDMetronome = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [beatFlash, setBeatFlash] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
-  const [volume, setVolume] = useState(0.5);
+  const [volume, setVolume] = useState(0.85);
 
   const audioContextRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
   const nextNoteTimeRef = useRef(0);
   const currentNoteRef = useRef(0);
   const timerIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,6 +131,14 @@ const ABCDMetronome = () => {
 
     try {
       audioContextRef.current = new AudioContextClass();
+      
+      // Crea il master gain node
+      if (audioContextRef.current && !masterGainRef.current) {
+        masterGainRef.current = audioContextRef.current.createGain();
+        masterGainRef.current.connect(audioContextRef.current.destination);
+        masterGainRef.current.gain.value = volume;
+      }
+      
       setAudioError(null);
       return true;
     } catch (error) {
@@ -168,7 +177,7 @@ const ABCDMetronome = () => {
     resumeAudioContext();
 
     const ctx = audioContextRef.current;
-    if (!ctx) return;
+    if (!ctx || !masterGainRef.current) return;
 
     const now = ctx.currentTime;
 
@@ -183,13 +192,13 @@ const ABCDMetronome = () => {
     const gainNode = ctx.createGain();
 
     osc.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    gainNode.connect(masterGainRef.current);
 
     osc.frequency.value = frequencies[count] || 880;
     osc.type = 'sine';
 
     gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.3 * volume, now + 0.01);
+    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
     gainNode.gain.exponentialRampToValueAtTime(0.01, now + Math.min(duration / 1000, 0.3));
 
     osc.start(now);
@@ -204,7 +213,7 @@ const ABCDMetronome = () => {
     resumeAudioContext();
 
     const ctx = audioContextRef.current;
-    if (!ctx) return;
+    if (!ctx || !masterGainRef.current) return;
 
     const now = ctx.currentTime;
 
@@ -212,13 +221,13 @@ const ABCDMetronome = () => {
     const gainNode = ctx.createGain();
 
     osc.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    gainNode.connect(masterGainRef.current);
 
     osc.frequency.value = 700;
     osc.type = 'triangle';
 
     gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.25 * volume, now + 0.005);
+    gainNode.gain.linearRampToValueAtTime(0.25, now + 0.005);
     gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
 
     osc.start(now);
@@ -226,17 +235,17 @@ const ABCDMetronome = () => {
   };
 
   const scheduleNote = (time: number, isAccent: boolean) => {
-    if (!audioContextRef.current) return;
+    if (!audioContextRef.current || !masterGainRef.current) return;
 
     const ctx = audioContextRef.current;
     const osc = ctx.createOscillator();
     const gainNode = ctx.createGain();
 
     osc.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    gainNode.connect(masterGainRef.current);
 
     osc.frequency.value = isAccent ? 1200 : 800;
-    gainNode.gain.value = (isAccent ? 0.3 : 0.15) * volume;
+    gainNode.gain.value = isAccent ? 0.3 : 0.15;
 
     osc.start(time);
     osc.stop(time + 0.05);
@@ -281,6 +290,13 @@ const ABCDMetronome = () => {
     const ctx = audioContextRef.current;
     if (!ctx) {
       return;
+    }
+
+    // Assicura che il master gain esista
+    if (!masterGainRef.current) {
+      masterGainRef.current = ctx.createGain();
+      masterGainRef.current.connect(ctx.destination);
+      masterGainRef.current.gain.value = volume;
     }
 
     currentNoteRef.current = 0;
@@ -454,6 +470,13 @@ const ABCDMetronome = () => {
       setTimeRemaining(phaseDurations[currentPhase] * 60);
     }
   }, [phaseDurations, currentPhase, isRunning]);
+
+  // Aggiorna il volume in tempo reale
+  useEffect(() => {
+    if (masterGainRef.current) {
+      masterGainRef.current.gain.value = volume;
+    }
+  }, [volume]);
 
   const handleStartStop = () => {
     if (isRunning) {
@@ -657,107 +680,11 @@ const ABCDMetronome = () => {
                 )}
               </div>
             </motion.section>
-          </div>
-
-          <motion.aside variants={staggerParent} className="space-y-8">
-            <motion.div
-              variants={scaleIn}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
-                  <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                  {`Sezione ${currentPhase}: ${phaseDurations[currentPhase]} Min`}
-                </div>
-              </div>
-              <p className="mt-4 text-xs text-neutral-500">
-                Il timer mostra il tempo rimanente per le sezioni successive. Saltando una sezione si aggiorna automaticamente.
-              </p>
-              {audioError && (
-                <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
-                  {audioError}
-                </div>
-              )}
-            </motion.div>
 
             <motion.div
               variants={scaleIn}
-              className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Controlli</span>
-                <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">live</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-4">
-                <button
-                  onClick={handleReset}
-                  className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white"
-                  title="Reset"
-                  style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.25)}` }}
-                >
-                  <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
-                  <RotateCcw size={22} className="relative" />
-                </button>
-
-                <button
-                  onClick={handleStartStop}
-                  className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
-                    isRunning && !isPaused
-                      ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
-                      : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
-                  }`}
-                >
-                  <span className="absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100" style={{ background: 'linear-gradient(120deg, rgba(255,255,255,0.25), rgba(255,255,255,0))' }} />
-                  {isRunning && !isPaused ? <Pause size={24} className="relative" /> : <Play size={24} className="relative" />}
-                  <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
-                </button>
-
-                <button
-                  onClick={() => goToNextPhase(true)}
-                  disabled={!isRunning || isInBreak || currentPhase === 'D'}
-                  className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                  title="Sezione successiva"
-                >
-                  <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
-                  <SkipForward size={22} className="relative" />
-                </button>
-              </div>
-            </motion.div>
-
-            <motion.div
-              variants={scaleIn}
-              className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Profilo fasi</span>
-                <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">overview</span>
-              </div>
-              <div className="space-y-5">
-                {phaseOrder.map(key => (
-                  <div key={key} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm font-semibold text-neutral-200">
-                      <span>{key} • {phaseStyles[key].name}</span>
-                      <span className="text-neutral-400">{Math.round(targetBPM * getPhasePercentage(key))} BPM</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                      <span>{phaseDurations[key]} min</span>
-                      <span>{phasePercentages[key]}%</span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-white/5">
-                      <div
-                        className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[key].color}`}
-                        style={{ width: `${Math.min(phasePercentages[key], 130)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur">
               <button
                 onClick={() => setShowSettings(!showSettings)}
                 className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
@@ -892,7 +819,115 @@ const ABCDMetronome = () => {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
+            </motion.div>
+          </div>
+
+          <motion.aside variants={staggerParent} className="space-y-8">
+            <motion.div
+              variants={scaleIn}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
+                  <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                  {`Sezione ${currentPhase}: ${phaseDurations[currentPhase]} Min`}
+                </div>
+              </div>
+              <p className="mt-4 text-xs text-neutral-500">
+                Il timer mostra il tempo rimanente per le sezioni successive. Saltando una sezione si aggiorna automaticamente.
+              </p>
+              {audioError && (
+                <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
+                  {audioError}
+                </div>
+              )}
+            </motion.div>
+
+            <motion.div
+              variants={scaleIn}
+              className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Controlli</span>
+                <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">live</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                <button
+                  onClick={handleReset}
+                  className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white"
+                  title="Reset"
+                  style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.25)}` }}
+                >
+                  <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
+                  <RotateCcw size={22} className="relative" />
+                </button>
+
+                <button
+                  onClick={handleStartStop}
+                  className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
+                    isRunning && !isPaused
+                      ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
+                      : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
+                  }`}
+                >
+                  <span className="absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100" style={{ background: 'linear-gradient(120deg, rgba(255,255,255,0.25), rgba(255,255,255,0))' }} />
+                  {isRunning && !isPaused ? <Pause size={24} className="relative" /> : <Play size={24} className="relative" />}
+                  <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
+                </button>
+
+                <button
+                  onClick={() => goToNextPhase(true)}
+                  disabled={!isRunning || isInBreak || currentPhase === 'D'}
+                  className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Sezione successiva"
+                >
+                  <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
+                  <SkipForward size={22} className="relative" />
+                </button>
+              </div>
+            </motion.div>
+
+            <motion.div
+              variants={scaleIn}
+              className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Profilo fasi</span>
+                <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">overview</span>
+              </div>
+              <div className="space-y-5">
+                {phaseOrder.map(key => (
+                  <div key={key} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm font-semibold text-neutral-200">
+                      <span>{key} • {phaseStyles[key].name}</span>
+                      <span className="text-neutral-400">{Math.round(targetBPM * getPhasePercentage(key))} BPM</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                      <span>{phaseDurations[key]} min</span>
+                      <span>{phasePercentages[key]}%</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5 relative">
+                      <div
+                        className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[key].color}`}
+                        style={{ width: `${Math.min(phasePercentages[key], 100) / 150 * 100}%` }}
+                      />
+                      {phasePercentages[key] > 100 && (
+                        <div
+                          className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-orange-500 to-red-600"
+                          style={{ 
+                            width: `${((phasePercentages[key] - 100) / 150) * 100}%`,
+                            marginLeft: `${(100 / 150) * 100}%`
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
           </motion.aside>
         </motion.div>
 
