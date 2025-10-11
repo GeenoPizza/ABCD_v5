@@ -1,6 +1,6 @@
 import { easeInOut } from "framer-motion";
-import { useState, useEffect, useRef } from "react";
-import { Play, Pause, SkipForward, RotateCcw, ChevronDown, ChevronUp, Plus, Minus, Volume2 } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from "react";
+import { Play, Pause, SkipForward, RotateCcw, ChevronDown, ChevronUp, Plus, Minus, Volume2, Info, RefreshCcw } from 'lucide-react'; 
 import { motion, AnimatePresence } from 'framer-motion';
 
 type PhaseKey = 'A' | 'B' | 'C' | 'D';
@@ -10,6 +10,7 @@ type PhaseStyle = {
   color: string;
   textColor: string;
   accent: string;
+  globalBarColor: string;
 };
 
 type PhaseDurations = Record<PhaseKey, number>;
@@ -19,10 +20,10 @@ type PhasePercentages = Record<PhaseKey, number>;
 const phaseOrder: PhaseKey[] = ['A', 'B', 'C', 'D'];
 
 const phaseStyles: Record<PhaseKey, PhaseStyle> = {
-  A: { name: 'Attenzione', color: 'from-[#4d6bb3] to-[#345997]', textColor: 'text-[#98b5f5]', accent: '#5f8dff' },
-  B: { name: 'Base', color: 'from-[#d8a343] to-[#b9852c]', textColor: 'text-[#f4d48a]', accent: '#f1b54f' },
-  C: { name: 'Challenge', color: 'from-[#d46c4a] to-[#b55133]', textColor: 'text-[#ffb08a]', accent: '#ff865c' },
-  D: { name: 'Destinazione', color: 'from-[#3a9d7a] to-[#2a7c5f]', textColor: 'text-[#9de7c6]', accent: '#5dda9d' }
+  A: { name: 'Attenzione', color: 'from-[#4d6bb3] to-[#345997]', textColor: 'text-[#98b5f5]', accent: '#5f8dff', globalBarColor: '#537abf' }, 
+  B: { name: 'Base', color: 'from-[#d8a343] to-[#b9852c]', textColor: 'text-[#f4d48a]', accent: '#f1b54f', globalBarColor: '#d6a855' }, 
+  C: { name: 'Challenge', color: 'from-[#d46c4a] to-[#b55133]', textColor: 'text-[#ffb08a]', accent: '#ff865c', globalBarColor: '#e07659' }, 
+  D: { name: 'Destinazione', color: 'from-[#3a9d7a] to-[#2a7c5f]', textColor: 'text-[#9de7c6]', accent: '#5dda9d', globalBarColor: '#47b089' } 
 };
 
 const defaultPhaseDurations: PhaseDurations = {
@@ -92,6 +93,7 @@ const ABCDMetronome = () => {
   const [isInBreak, setIsInBreak] = useState(false);
   const [countdownBeat, setCountdownBeat] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false); 
   const [beatFlash, setBeatFlash] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [volume, setVolume] = useState(0.85);
@@ -112,6 +114,13 @@ const ABCDMetronome = () => {
     sixteenth: { name: '♬♬ 1/16', beats: 4 }
   } as const;
 
+  const getPhasePercentage = (phase: PhaseKey) => phasePercentages[phase] / 100;
+
+  const getCurrentBPM = () => {
+    return Math.round(targetBPM * getPhasePercentage(currentPhase));
+  };
+  
+  // Funzioni Audio Core
   const ensureAudioContext = () => {
     if (typeof window === 'undefined') {
       return false;
@@ -132,7 +141,6 @@ const ABCDMetronome = () => {
     try {
       audioContextRef.current = new AudioContextClass();
       
-      // Crea il master gain node
       if (audioContextRef.current && !masterGainRef.current) {
         masterGainRef.current = audioContextRef.current.createGain();
         masterGainRef.current.connect(audioContextRef.current.destination);
@@ -161,12 +169,6 @@ const ABCDMetronome = () => {
           setAudioError("Per abilitare i suoni interagisci con la pagina (es. premi Start) e consenti l'audio.");
         });
     }
-  };
-
-  const getPhasePercentage = (phase: PhaseKey) => phasePercentages[phase] / 100;
-
-  const getCurrentBPM = () => {
-    return Math.round(targetBPM * getPhasePercentage(currentPhase));
   };
 
   const playCountSound = (count: number, duration: number) => {
@@ -268,16 +270,25 @@ const ABCDMetronome = () => {
     while (audioContextRef.current && nextNoteTimeRef.current < audioContextRef.current.currentTime + scheduleAheadTime) {
       const currentBPM = getCurrentBPM();
       const beatsPerBar = subdivisions[subdivision].beats;
+      
       const isAccent = currentNoteRef.current % beatsPerBar === 0;
 
       scheduleNote(nextNoteTimeRef.current, isAccent);
 
-      const secondsPerBeat = 60.0 / (currentBPM * subdivisions[subdivision].beats);
-      nextNoteTimeRef.current += secondsPerBeat;
+      const secondsPerNote = 60.0 / (currentBPM * subdivisions[subdivision].beats); 
+      
+      nextNoteTimeRef.current += secondsPerNote;
       currentNoteRef.current++;
     }
 
     timerIdRef.current = setTimeout(scheduler, lookahead * 1000);
+  };
+
+  const stopMetronome = () => {
+    if (timerIdRef.current) {
+      clearTimeout(timerIdRef.current);
+      timerIdRef.current = null;
+    }
   };
 
   const startMetronome = () => {
@@ -292,23 +303,17 @@ const ABCDMetronome = () => {
       return;
     }
 
-    // Assicura che il master gain esista
     if (!masterGainRef.current) {
       masterGainRef.current = ctx.createGain();
       masterGainRef.current.connect(ctx.destination);
       masterGainRef.current.gain.value = volume;
     }
-
+    
+    // Reset di scheduling e contatori per evitare glitch quando il BPM o la fase cambiano.
     currentNoteRef.current = 0;
     nextNoteTimeRef.current = ctx.currentTime;
+    
     scheduler();
-  };
-
-  const stopMetronome = () => {
-    if (timerIdRef.current) {
-      clearTimeout(timerIdRef.current);
-      timerIdRef.current = null;
-    }
   };
 
   const calculateRemainingTime = (fromPhase: PhaseKey) => {
@@ -323,62 +328,59 @@ const ABCDMetronome = () => {
   const startBreak = (nextPhase: PhaseKey) => {
     setIsInBreak(true);
     setCountdownBeat(0);
+    
+    setTotalTimeRemaining(calculateRemainingTime(nextPhase));
 
     countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
     countdownTimeoutsRef.current = [];
 
     const nextBPM = Math.round(targetBPM * getPhasePercentage(nextPhase));
-    const halfNoteDuration = (60 / nextBPM) * 2 * 1000;
-    const quarterNoteDuration = (60 / nextBPM) * 1000;
-
+    const noteDuration = (60 / nextBPM) * 1000; 
+    
+    // 1st measure (2 full beats)
     const t1 = setTimeout(() => {
-      playCountSound(1, halfNoteDuration);
-      setCountdownBeat(1);
-    }, 0);
-
-    const tick1 = setTimeout(() => {
-      playTickSound();
-    }, quarterNoteDuration);
+      playCountSound(1, noteDuration * 2); setCountdownBeat(1);
+    }, noteDuration * 0);
 
     const t2 = setTimeout(() => {
-      playCountSound(2, halfNoteDuration);
-      setCountdownBeat(2);
-    }, halfNoteDuration);
-
-    const tick2 = setTimeout(() => {
       playTickSound();
-    }, halfNoteDuration + quarterNoteDuration);
+    }, noteDuration * 1);
 
     const t3 = setTimeout(() => {
-      playCountSound(1, quarterNoteDuration);
-      setCountdownBeat(3);
-    }, halfNoteDuration * 2);
+      playCountSound(2, noteDuration * 2); setCountdownBeat(2);
+    }, noteDuration * 2);
 
     const t4 = setTimeout(() => {
-      playCountSound(2, quarterNoteDuration);
-      setCountdownBeat(4);
-    }, halfNoteDuration * 2 + quarterNoteDuration);
+      playTickSound();
+    }, noteDuration * 3);
 
+    // 2nd measure (4 quick beats)
     const t5 = setTimeout(() => {
-      playCountSound(3, quarterNoteDuration);
-      setCountdownBeat(5);
-    }, halfNoteDuration * 2 + quarterNoteDuration * 2);
+      playCountSound(1, noteDuration); setCountdownBeat(3);
+    }, noteDuration * 4);
 
     const t6 = setTimeout(() => {
-      playCountSound(4, quarterNoteDuration);
-      setCountdownBeat(6);
-    }, halfNoteDuration * 2 + quarterNoteDuration * 3);
+      playCountSound(2, noteDuration); setCountdownBeat(4);
+    }, noteDuration * 5);
 
     const t7 = setTimeout(() => {
+      playCountSound(3, noteDuration); setCountdownBeat(5);
+    }, noteDuration * 6);
+
+    const t8 = setTimeout(() => {
+      playCountSound(4, noteDuration); setCountdownBeat(6); // Go!
+    }, noteDuration * 7);
+
+    const t9 = setTimeout(() => {
       setIsInBreak(false);
       setCountdownBeat(0);
       setCurrentPhase(nextPhase);
       setTimeRemaining(phaseDurations[nextPhase] * 60);
-      setTotalTimeRemaining(calculateRemainingTime(nextPhase));
-    }, halfNoteDuration * 2 + quarterNoteDuration * 4);
+    }, noteDuration * 8);
 
-    countdownTimeoutsRef.current = [t1, tick1, t2, tick2, t3, t4, t5, t6, t7];
+    countdownTimeoutsRef.current = [t1, t2, t3, t4, t5, t6, t7, t8, t9];
   };
+
 
   const goToNextPhase = (manual = false) => {
     const currentIndex = phaseOrder.indexOf(currentPhase);
@@ -389,12 +391,16 @@ const ABCDMetronome = () => {
         clearInterval(intervalIdRef.current);
         intervalIdRef.current = null;
       }
-
+      
       startBreak(phaseOrder[currentIndex + 1]);
     } else if (manual) {
       setTotalTimeRemaining(0);
+      setIsRunning(false);
+      setCurrentPhase('A');
+      setTimeRemaining(phaseDurations['A'] * 60);
     }
   };
+
 
   useEffect(() => {
     if (isRunning && !isPaused && !isInBreak) {
@@ -405,7 +411,8 @@ const ABCDMetronome = () => {
         setTotalTimeRemaining(prev => (prev > 0 ? prev - 1 : 0));
       }, 1000);
 
-      startMetronome();
+      startMetronome(); 
+      
       if (intervalIdRef.current) {
         clearInterval(intervalIdRef.current);
       }
@@ -456,7 +463,7 @@ const ABCDMetronome = () => {
         globalIntervalRef.current = null;
       }
     };
-  }, [isRunning, isPaused, isInBreak, currentPhase, subdivision, phaseDurations]);
+  }, [isRunning, isPaused, isInBreak, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages]); 
 
   useEffect(() => {
     return () => {
@@ -471,13 +478,12 @@ const ABCDMetronome = () => {
     }
   }, [phaseDurations, currentPhase, isRunning]);
 
-  // Aggiorna il volume in tempo reale
   useEffect(() => {
     if (masterGainRef.current) {
       masterGainRef.current.gain.value = volume;
     }
   }, [volume]);
-
+  
   const handleStartStop = () => {
     if (isRunning) {
       setIsPaused(!isPaused);
@@ -491,6 +497,29 @@ const ABCDMetronome = () => {
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === ' ') {
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.getAttribute('contenteditable') === 'true')) {
+          return; 
+        }
+        
+        event.preventDefault();
+
+        if (!isInBreak) {
+          handleStartStop();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isRunning, isPaused, isInBreak, phaseDurations]);
+
   const handleReset = () => {
     setIsRunning(false);
     setIsPaused(false);
@@ -501,6 +530,17 @@ const ABCDMetronome = () => {
     stopMetronome();
     countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
     countdownTimeoutsRef.current = [];
+  };
+
+  const handleResetDefaults = () => {
+    if (isRunning) return; // Non resettare se il metronomo è attivo
+    setPhaseDurations({ ...defaultPhaseDurations });
+    setPhasePercentages({ ...defaultPhasePercentages });
+    setTargetBPM(100);
+    setSubdivision('quarter');
+    setCurrentPhase('A');
+    setTotalTimeRemaining(calculateTotalTime(defaultPhaseDurations));
+    setTimeRemaining(defaultPhaseDurations['A'] * 60);
   };
 
   const formatTime = (seconds: number) => {
@@ -530,6 +570,23 @@ const ABCDMetronome = () => {
     if (phase === 'D') return;
     setPhasePercentages(prev => ({ ...prev, [phase]: value, D: 100 }));
   };
+  
+  // Logica Barra di Progressione Globale
+  const totalDuration = calculateTotalTime(phaseDurations);
+  const totalElapsed = totalDuration - totalTimeRemaining;
+  const currentProgressWidth = isRunning && totalDuration > 0 ? (totalElapsed / totalDuration) * 100 : 0;
+  
+  const gradientStops = useMemo(() => {
+    if (totalDuration === 0) return '';
+    let cumulativePercentage = 0;
+    return phaseOrder.map(key => {
+      const phaseDurationPerc = (phaseDurations[key] * 60 / totalDuration) * 100;
+      const phaseColor = phaseStyles[key].globalBarColor;
+      const start = cumulativePercentage;
+      cumulativePercentage += phaseDurationPerc;
+      return `${phaseColor} ${start}%, ${phaseColor} ${cumulativePercentage}%`;
+    }).join(', ');
+  }, [phaseDurations, totalDuration]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#0b0d0e] text-white">
@@ -554,139 +611,153 @@ const ABCDMetronome = () => {
             prodotto da Batterista Online
           </p>
         </motion.header>
+        
+        <motion.div 
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            className="relative mt-8 h-1.5 w-full overflow-hidden rounded-full bg-white/5 shadow-inner"
+        >
+            <div
+                className="absolute inset-y-0 left-0 rounded-full transition-all duration-1000 ease-linear"
+                style={{
+                    width: `${currentProgressWidth}%`,
+                    background: `linear-gradient(to right, ${gradientStops})`,
+                }}
+            />
+        </motion.div>
 
         <motion.div
-          className="mt-14 grid gap-12 lg:grid-cols-[1.45fr_1fr] lg:items-start"
+          className="mt-14 flex flex-col gap-12 lg:grid lg:grid-cols-[1.45fr_1fr] lg:items-start"
           variants={staggerParent}
           initial="hidden"
           animate="visible"
         >
-          <div className="space-y-10">
+          <div className="space-y-10 lg:order-1">
             <motion.section
               variants={scaleIn}
               className="relative overflow-hidden rounded-[32px] border border-white/8 bg-white/5 p-8 shadow-[0_32px_70px_rgba(8,10,12,0.35)] backdrop-blur-xl"
             >
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_rgba(17,19,22,0.6))] opacity-90" />
               <div className="relative z-10 space-y-12">
-                {isInBreak ? (
-                  <motion.div
-                    key="break"
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.65, ease: 'easeOut' }}
-                    className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur"
-                  >
-                    <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">Preparazione</span>
-                    <div className="mt-6 text-[5.5rem] font-bold text-[#8ab7aa]">
-                      {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
-                    </div>
-                    <p className="text-neutral-400">
-                      {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
-                    </p>
-                  </motion.div>
-                ) : (
-                  <motion.div key="active" className="space-y-12">
+                <AnimatePresence mode="wait">
+                  {isInBreak ? (
                     <motion.div
-                      variants={staggerParent}
-                      initial="hidden"
-                      animate="visible"
-                      className="flex flex-wrap items-center gap-3"
+                      key="break"
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.65, ease: 'easeOut' }}
+                      className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur"
                     >
-                      {phaseOrder.map(key => (
-                        <motion.div
-                          key={key}
-                          variants={pillVariant}
-                          className={`group flex items-center gap-2 rounded-full border border-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] transition ${
-                            currentPhase === key
-                              ? `bg-gradient-to-r ${phaseStyles[key].color} text-white shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
-                              : 'bg-white/5 text-neutral-500'
-                          }`}
-                        >
-                          <span>{key}</span>
-                          <span className="hidden text-[10px] tracking-[0.3em] text-white/70 sm:inline">
-                            {phaseStyles[key].name}
-                          </span>
-                        </motion.div>
-                      ))}
+                      <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">Preparazione</span>
+                      <div className="mt-6 text-[5.5rem] font-bold text-[#8ab7aa]">
+                        {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
+                      </div>
+                      <p className="text-neutral-400">
+                        {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
+                      </p>
                     </motion.div>
+                  ) : (
+                    <motion.div key="active" className="space-y-12">
+                      <motion.div
+                        variants={staggerParent}
+                        initial="hidden"
+                        animate="visible"
+                        // Forzato grid 2x2 stabile
+                        className="grid grid-cols-2 gap-3 justify-items-center xl:grid-cols-4 xl:flex xl:flex-wrap xl:justify-start" 
+                      >
+                        {phaseOrder.map(key => (
+                          <motion.div
+                            key={key}
+                            variants={pillVariant}
+                            // Classi compattate per garantire 2x2
+                            className={`group flex items-center gap-0.5 rounded-full border border-white/5 px-3.5 py-1.5 text-sm transition ${
+                              currentPhase === key
+                                ? `bg-gradient-to-r ${phaseStyles[key].color} text-white font-semibold shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
+                                : 'bg-white/5 text-neutral-300 hover:text-white'
+                            }`}
+                          >
+                            {/* FIX 3: Iniziale in grassetto e colorata */}
+                            <span className="font-bold" style={{ color: currentPhase === key ? 'white' : phaseStyles[key].accent }}>
+                              {key}
+                            </span>
+                            {/* Il resto del nome è in font leggero */}
+                            <span className={`font-light transition ${currentPhase === key ? 'text-white/80' : 'text-neutral-400'}`}>
+                              {phaseStyles[key].name.substring(1)}
+                            </span>
+                          </motion.div>
+                        ))}
+                      </motion.div>
 
-                    <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
-                      <div className="relative mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
-                        <div
-                          className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
-                          style={{
-                            borderColor: beatFlash ? phaseStyles[currentPhase].accent : 'rgba(255,255,255,0.12)',
-                            boxShadow: beatFlash
-                              ? `0 0 70px ${phaseStyles[currentPhase].accent}66, inset 0 0 35px ${phaseStyles[currentPhase].accent}33`
-                              : 'inset 0 0 28px rgba(0,0,0,0.4)'
-                          }}
-                        />
-                        <div className="relative text-center">
-                          <div className="text-[4.85rem] font-semibold" style={{ color: phaseStyles[currentPhase].accent }}>{getCurrentBPM()}</div>
-                          <div className="text-sm uppercase tracking-[0.4em] text-neutral-400">BPM</div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-6 text-left">
-                        <div>
-                          <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">Sezione attuale</span>
-                          <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
-                            {currentPhase} • {phaseStyles[currentPhase].name}
-                          </h2>
-                          <p className="mt-2 text-sm text-neutral-400">
-                            {subdivisions[subdivision].name} • Target {targetBPM} BPM • Durata {phaseDurations[currentPhase]} min
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
-                          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                            Tempo totale • {formatTime(totalTimeRemaining)}
-                          </span>
-                          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                            {phasePercentages[currentPhase]}% della velocità target
-                          </span>
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                            <span>Progressione sezione</span>
-                            <span>{formatTime(timeRemaining)}</span>
-                          </div>
-                          <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-white/5">
-                            <div
-                              className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[currentPhase].color}`}
-                              style={{ width: `${(timeRemaining / (phaseDurations[currentPhase] * 60)) * 100}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
-                          <Volume2 size={16} className="text-neutral-400" />
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            value={volume}
-                            onChange={(e) => setVolume(Number(e.target.value))}
-                            className="flex-1 accent-[#3e5c55] [--tw-ring-color:transparent]"
+                      <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
+                        <div className="relative mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
+                          <div
+                            className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
+                            style={{
+                              borderColor: beatFlash ? phaseStyles[currentPhase].accent : 'rgba(255,255,255,0.12)',
+                              boxShadow: beatFlash
+                                ? `0 0 70px ${phaseStyles[currentPhase].accent}66, inset 0 0 35px ${phaseStyles[currentPhase].accent}33`
+                                : 'inset 0 0 28px rgba(0,0,0,0.4)'
+                            }}
                           />
-                          <span className="text-xs text-neutral-400 w-10 text-right">{Math.round(volume * 100)}%</span>
+                          <div className="relative text-center">
+                            <div className="text-[4.85rem] font-semibold" style={{ color: phaseStyles[currentPhase].accent }}>{getCurrentBPM()}</div>
+                            <div className="text-sm uppercase tracking-[0.4em] text-neutral-400">BPM</div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-6 text-left">
+                          <div>
+                            <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">Sezione attuale</span>
+                            <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
+                              {currentPhase} • {phaseStyles[currentPhase].name}
+                            </h2>
+                            <p className="mt-2 text-sm text-neutral-400">
+                              {subdivisions[subdivision].name} • Target {targetBPM} BPM • Durata {phaseDurations[currentPhase]} min
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                              Tempo totale • {formatTime(totalTimeRemaining)}
+                            </span>
+                            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                              {phasePercentages[currentPhase]}% della velocità target
+                            </span>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                              <span>Progressione sezione</span>
+                              <span>{formatTime(timeRemaining)}</span>
+                            </div>
+                            <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-white/5">
+                              <div
+                                className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[currentPhase].color}`}
+                                style={{ width: `${(timeRemaining / (phaseDurations[currentPhase] * 60)) * 100}%` }}
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </motion.section>
-
+            
+            {/* SEZIONE 1: SETTINGS */}
             <motion.div
               variants={scaleIn}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur lg:order-4"
             >
+              {/* FIX 1: Pulsante a tutta larghezza */}
               <button
-                onClick={() => setShowSettings(!showSettings)}
+                onClick={() => {
+                  setShowSettings(!showSettings);
+                  setShowInstructions(false); 
+                }}
                 className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
               >
                 <span>Settings</span>
@@ -703,6 +774,7 @@ const ABCDMetronome = () => {
                     transition={{ duration: 0.4, ease: 'easeOut' }}
                     className="mt-6 space-y-8 text-neutral-200"
                   >
+                    
                     <div>
                       <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">BPM Target</label>
                       <div className="flex items-center gap-4">
@@ -813,6 +885,23 @@ const ABCDMetronome = () => {
                       </div>
                     </div>
 
+                    {/* FIX 2: Pulsante Reset alleggerito nello stile e nel testo */}
+                    <div className="border-t border-white/10 pt-5 space-y-3">
+                        <button
+                            onClick={handleResetDefaults}
+                            disabled={isRunning}
+                            // Stile alleggerito: sfondo più tenue, colore testo più soft.
+                            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 px-4 py-2 text-sm font-semibold text-neutral-400 transition hover:border-white/20 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                            title="Ripristina durate e percentuali di default"
+                        >
+                            <RefreshCcw size={16} className="text-neutral-500" />
+                            Ripristina Defaults
+                        </button>
+                        <div className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                            {isRunning ? 'Impossibile modificare le impostazioni durante la riproduzione' : 'Tutte le modifiche (BPM, durate, percentuali) verranno riportate ai valori iniziali.'}
+                        </div>
+                    </div>
+                    
                     <div className="border-t border-white/10 pt-5 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
                       Preview BPM per sezione aggiornata in tempo reale
                     </div>
@@ -820,12 +909,77 @@ const ABCDMetronome = () => {
                 )}
               </AnimatePresence>
             </motion.div>
-          </div>
 
-          <motion.aside variants={staggerParent} className="space-y-8">
+            {/* SEZIONE 2: INFO & ISTRUZIONI (TESTO AGGIORNATO E INGRANDITO) */}
             <motion.div
               variants={scaleIn}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur"
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur lg:order-5"
+            >
+              <button
+                onClick={() => {
+                  setShowInstructions(!showInstructions);
+                  setShowSettings(false); 
+                }}
+                className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
+              >
+                <span className="flex items-center gap-2"><Info size={16} /> Info & Istruzioni</span>
+                {showInstructions ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              </button>
+
+              <AnimatePresence initial={false}>
+                {showInstructions && (
+                  <motion.div
+                    key="instructions-panel"
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                    className="mt-6 space-y-6 text-neutral-300"
+                  >
+                    
+                    <div className="space-y-3">
+                      <h4 className="text-lg font-semibold text-neutral-200">ABCD method = Attenzione, Base, Challenge, Destinazione.</h4>
+                      <p className="text-base text-neutral-400">
+                        Un metodo semplice per studiare in modo più efficace, anche solo 12 minuti al giorno. Ogni sessione ti fa passare da lentezza e precisione, fino alla velocità target, in modo logico e progressivo. È lo stesso principio dell’allenamento sportivo: alternare concentrazione, sforzo e recupero per costruire stabilità.
+                      </p>
+                    </div>
+                    
+                    <div className="border-t border-white/10 pt-4 space-y-3">
+                      <h4 className="text-lg font-semibold text-neutral-200">Funzionamento</h4>
+                      <p className="text-base text-neutral-400">
+                        Quando premi Play, il metronomo suonerà per i minuti impostati alla velocità della sezione attiva. Alla fine di ogni fase sentirai un countdown e il timer passerà automaticamente alla sezione successiva.
+                        Di default, ogni sezione dura 3 minuti con le velocità: A 70%, B 85%, C 105%, D 100%.
+                      </p>
+                    </div>
+
+                    <div className="border-t border-white/10 pt-4 space-y-3">
+                      <h4 className="text-lg font-semibold text-neutral-200">Struttura Default</h4>
+                      <p className="text-base text-neutral-400 mb-2">4 fasi da 3 minuti ciascuna:</p>
+                      <ul className="list-none space-y-1 pl-0 text-base text-neutral-400">
+                        <li><span className="font-semibold text-neutral-200">A – 70%</span> controllo e meccanica</li>
+                        <li><span className="font-semibold text-neutral-200">B – 85%</span> stabilità e suono</li>
+                        <li><span className="font-semibold text-neutral-200">C – 105%</span> sfida e resistenza</li>
+                        <li><span className="font-semibold text-neutral-200">D – 100%</span> naturalezza e obiettivo</li>
+                      </ul>
+                    </div>
+
+                    <div className="border-t border-white/10 pt-4 space-y-3">
+                      <h4 className="text-lg font-semibold text-neutral-200">Personalizzazione</h4>
+                      <p className="text-base text-neutral-400">
+                        Puoi modificare durate e velocità come vuoi cliccando la sezione **"Settings"**: qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perchè è ovviamente pari al 100%).
+                      </p>
+                    </div>
+
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </div>
+
+          <motion.aside variants={staggerParent} className="space-y-8 lg:order-2">
+            <motion.div
+              variants={scaleIn}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur lg:order-2"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -836,9 +990,6 @@ const ABCDMetronome = () => {
                   {`Sezione ${currentPhase}: ${phaseDurations[currentPhase]} Min`}
                 </div>
               </div>
-              <p className="mt-4 text-xs text-neutral-500">
-                Il timer mostra il tempo rimanente per le sezioni successive. Saltando una sezione si aggiorna automaticamente.
-              </p>
               {audioError && (
                 <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
                   {audioError}
@@ -848,7 +999,7 @@ const ABCDMetronome = () => {
 
             <motion.div
               variants={scaleIn}
-              className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+              className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur lg:order-1"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Controlli</span>
@@ -857,7 +1008,7 @@ const ABCDMetronome = () => {
               <div className="flex flex-wrap items-center gap-4">
                 <button
                   onClick={handleReset}
-                  className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white"
+                  className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
                   title="Reset"
                   style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.25)}` }}
                 >
@@ -888,11 +1039,25 @@ const ABCDMetronome = () => {
                   <SkipForward size={22} className="relative" />
                 </button>
               </div>
+              
+              <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
+                <Volume2 size={16} className="text-neutral-400" />
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={volume}
+                  onChange={(e) => setVolume(Number(e.target.value))}
+                  className="flex-1 accent-[#3e5c55] [--tw-ring-color:transparent]"
+                />
+                <span className="w-10 text-right text-xs text-neutral-400">{Math.round(volume * 100)}%</span>
+              </div>
             </motion.div>
 
             <motion.div
               variants={scaleIn}
-              className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+              className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur lg:order-3"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Profilo fasi</span>
@@ -938,6 +1103,7 @@ const ABCDMetronome = () => {
           className="mt-16 flex flex-col gap-2 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-600 lg:flex-row lg:items-center lg:justify-between"
         >
           <span>Copyright © Batterista Online - Tutti i diritti riservati - www.batterista.online</span>
+          <span className="text-neutral-500">ABCD method versione 1.6</span>
         </motion.footer>
       </div>
     </div>
