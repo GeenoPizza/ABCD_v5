@@ -1,9 +1,9 @@
 { "name": "ABCD method",
-  "short_name": "ABCD",
+  "short_name": "ABCD method",
   "description": "ABCD method - Batterista Online",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#1b1b1b",
   "theme_color": "#0f172a",
   "orientation": "portrait",
   "icons": [
