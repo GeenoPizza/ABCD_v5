@@ -10,7 +10,7 @@ type PhaseStyle = {
   color: string;
   textColor: string;
   accent: string;
-  globalBarColor: string;
+  globalBarColor: string; // Aggiunto per la barra di progressione globale
 };
 
 type PhaseDurations = Record<PhaseKey, number>;
@@ -120,15 +120,9 @@ const ABCDMetronome = () => {
     return Math.round(targetBPM * getPhasePercentage(currentPhase));
   };
   
-  // Funzioni Audio Core
   const ensureAudioContext = () => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      return true;
-    }
+    if (typeof window === 'undefined') { return false; }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') { return true; }
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
 
@@ -140,13 +134,11 @@ const ABCDMetronome = () => {
 
     try {
       audioContextRef.current = new AudioContextClass();
-      
       if (audioContextRef.current && !masterGainRef.current) {
         masterGainRef.current = audioContextRef.current.createGain();
         masterGainRef.current.connect(audioContextRef.current.destination);
         masterGainRef.current.gain.value = volume;
       }
-      
       setAudioError(null);
       return true;
     } catch (error) {
@@ -159,7 +151,6 @@ const ABCDMetronome = () => {
 
   const resumeAudioContext = () => {
     if (!audioContextRef.current) return;
-
     if (audioContextRef.current.state === 'suspended') {
       audioContextRef.current
         .resume()
@@ -171,7 +162,7 @@ const ABCDMetronome = () => {
     }
   };
 
-  const playCountSound = (count: number, duration: number) => {
+  const playCountSound = (count: number, duration: number) => { 
     if (!ensureAudioContext()) {
       return;
     }
@@ -207,7 +198,7 @@ const ABCDMetronome = () => {
     osc.stop(now + Math.min(duration / 1000, 0.3));
   };
 
-  const playTickSound = () => {
+  const playTickSound = () => { 
     if (!ensureAudioContext()) {
       return;
     }
@@ -235,86 +226,58 @@ const ABCDMetronome = () => {
     osc.start(now);
     osc.stop(now + 0.06);
   };
-
-  const scheduleNote = (time: number, isAccent: boolean) => {
+  
+  const scheduleNote = (time: number, isAccent: boolean) => { 
     if (!audioContextRef.current || !masterGainRef.current) return;
-
     const ctx = audioContextRef.current;
     const osc = ctx.createOscillator();
     const gainNode = ctx.createGain();
-
     osc.connect(gainNode);
     gainNode.connect(masterGainRef.current);
-
     osc.frequency.value = isAccent ? 1200 : 800;
     gainNode.gain.value = isAccent ? 0.3 : 0.15;
-
     osc.start(time);
     osc.stop(time + 0.05);
-
     const delay = (time - ctx.currentTime) * 1000;
     setTimeout(() => {
       setBeatFlash(true);
       setTimeout(() => setBeatFlash(false), 50);
     }, delay);
   };
-
+  
   const scheduler = () => {
-    if (!audioContextRef.current) {
-      return;
-    }
-
+    if (!audioContextRef.current) { return; }
     const lookahead = 0.1;
     const scheduleAheadTime = 0.2;
-
     while (audioContextRef.current && nextNoteTimeRef.current < audioContextRef.current.currentTime + scheduleAheadTime) {
       const currentBPM = getCurrentBPM();
       const beatsPerBar = subdivisions[subdivision].beats;
-      
       const isAccent = currentNoteRef.current % beatsPerBar === 0;
-
       scheduleNote(nextNoteTimeRef.current, isAccent);
-
       const secondsPerNote = 60.0 / (currentBPM * subdivisions[subdivision].beats); 
-      
       nextNoteTimeRef.current += secondsPerNote;
       currentNoteRef.current++;
     }
-
     timerIdRef.current = setTimeout(scheduler, lookahead * 1000);
   };
-
-  const stopMetronome = () => {
-    if (timerIdRef.current) {
-      clearTimeout(timerIdRef.current);
-      timerIdRef.current = null;
-    }
-  };
-
+  
+  const stopMetronome = () => { if (timerIdRef.current) { clearTimeout(timerIdRef.current); timerIdRef.current = null; } };
+  
   const startMetronome = () => {
-    if (!ensureAudioContext()) {
-      return;
-    }
-
+    if (!ensureAudioContext()) { return; }
     resumeAudioContext();
-
     const ctx = audioContextRef.current;
-    if (!ctx) {
-      return;
-    }
-
+    if (!ctx) { return; }
     if (!masterGainRef.current) {
       masterGainRef.current = ctx.createGain();
       masterGainRef.current.connect(ctx.destination);
       masterGainRef.current.gain.value = volume;
     }
-    
-    // Reset di scheduling e contatori per evitare glitch quando il BPM o la fase cambiano.
     currentNoteRef.current = 0;
     nextNoteTimeRef.current = ctx.currentTime;
-    
     scheduler();
   };
+  
 
   const calculateRemainingTime = (fromPhase: PhaseKey) => {
     const currentIndex = phaseOrder.indexOf(fromPhase);
@@ -335,50 +298,29 @@ const ABCDMetronome = () => {
     countdownTimeoutsRef.current = [];
 
     const nextBPM = Math.round(targetBPM * getPhasePercentage(nextPhase));
-    const noteDuration = (60 / nextBPM) * 1000; 
+    const halfNoteDuration = (60 / nextBPM) * 2 * 1000;
+    const quarterNoteDuration = (60 / nextBPM) * 1000;
     
-    // 1st measure (2 full beats)
-    const t1 = setTimeout(() => {
-      playCountSound(1, noteDuration * 2); setCountdownBeat(1);
-    }, noteDuration * 0);
-
-    const t2 = setTimeout(() => {
-      playTickSound();
-    }, noteDuration * 1);
-
-    const t3 = setTimeout(() => {
-      playCountSound(2, noteDuration * 2); setCountdownBeat(2);
-    }, noteDuration * 2);
-
-    const t4 = setTimeout(() => {
-      playTickSound();
-    }, noteDuration * 3);
-
+    // Countdown sounds
+    // 1st measure (2 half beats)
+    const t1 = setTimeout(() => { playCountSound(1, halfNoteDuration); setCountdownBeat(1); }, 0);
+    const tick1 = setTimeout(() => { playTickSound(); }, quarterNoteDuration);
+    const t2 = setTimeout(() => { playCountSound(2, halfNoteDuration); setCountdownBeat(2); }, halfNoteDuration);
+    const tick2 = setTimeout(() => { playTickSound(); }, halfNoteDuration + quarterNoteDuration);
     // 2nd measure (4 quick beats)
-    const t5 = setTimeout(() => {
-      playCountSound(1, noteDuration); setCountdownBeat(3);
-    }, noteDuration * 4);
-
-    const t6 = setTimeout(() => {
-      playCountSound(2, noteDuration); setCountdownBeat(4);
-    }, noteDuration * 5);
+    const t3 = setTimeout(() => { playCountSound(1, quarterNoteDuration); setCountdownBeat(3); }, halfNoteDuration * 2);
+    const t4 = setTimeout(() => { playCountSound(2, quarterNoteDuration); setCountdownBeat(4); }, halfNoteDuration * 2 + quarterNoteDuration);
+    const t5 = setTimeout(() => { playCountSound(3, quarterNoteDuration); setCountdownBeat(5); }, halfNoteDuration * 2 + quarterNoteDuration * 2);
+    const t6 = setTimeout(() => { playCountSound(4, quarterNoteDuration); setCountdownBeat(6); }, halfNoteDuration * 2 + quarterNoteDuration * 3);
 
     const t7 = setTimeout(() => {
-      playCountSound(3, noteDuration); setCountdownBeat(5);
-    }, noteDuration * 6);
-
-    const t8 = setTimeout(() => {
-      playCountSound(4, noteDuration); setCountdownBeat(6); // Go!
-    }, noteDuration * 7);
-
-    const t9 = setTimeout(() => {
       setIsInBreak(false);
       setCountdownBeat(0);
       setCurrentPhase(nextPhase);
       setTimeRemaining(phaseDurations[nextPhase] * 60);
-    }, noteDuration * 8);
+    }, halfNoteDuration * 2 + quarterNoteDuration * 4);
 
-    countdownTimeoutsRef.current = [t1, t2, t3, t4, t5, t6, t7, t8, t9];
+    countdownTimeoutsRef.current = [t1, tick1, t2, tick2, t3, t4, t5, t6, t7];
   };
 
 
@@ -404,26 +346,19 @@ const ABCDMetronome = () => {
 
   useEffect(() => {
     if (isRunning && !isPaused && !isInBreak) {
-      if (globalIntervalRef.current) {
-        clearInterval(globalIntervalRef.current);
-      }
+      if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); }
       globalIntervalRef.current = setInterval(() => {
         setTotalTimeRemaining(prev => (prev > 0 ? prev - 1 : 0));
       }, 1000);
 
       startMetronome(); 
       
-      if (intervalIdRef.current) {
-        clearInterval(intervalIdRef.current);
-      }
+      if (intervalIdRef.current) { clearInterval(intervalIdRef.current); }
       intervalIdRef.current = setInterval(() => {
         setTimeRemaining(prev => {
           if (prev <= 1) {
             stopMetronome();
-            if (intervalIdRef.current) {
-              clearInterval(intervalIdRef.current);
-              intervalIdRef.current = null;
-            }
+            if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
 
             const currentIndex = phaseOrder.indexOf(currentPhase);
 
@@ -442,26 +377,14 @@ const ABCDMetronome = () => {
       }, 1000);
     } else {
       stopMetronome();
-      if (intervalIdRef.current) {
-        clearInterval(intervalIdRef.current);
-        intervalIdRef.current = null;
-      }
-      if (globalIntervalRef.current) {
-        clearInterval(globalIntervalRef.current);
-        globalIntervalRef.current = null;
-      }
+      if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+      if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
     }
 
     return () => {
       stopMetronome();
-      if (intervalIdRef.current) {
-        clearInterval(intervalIdRef.current);
-        intervalIdRef.current = null;
-      }
-      if (globalIntervalRef.current) {
-        clearInterval(globalIntervalRef.current);
-        globalIntervalRef.current = null;
-      }
+      if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+      if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
     };
   }, [isRunning, isPaused, isInBreak, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages]); 
 
@@ -533,7 +456,8 @@ const ABCDMetronome = () => {
   };
 
   const handleResetDefaults = () => {
-    if (isRunning) return; // Non resettare se il metronomo è attivo
+    // CORREZIONE: Permetti il reset se il metronomo è fermo O se è in pausa
+    if (isRunning && !isPaused) return; 
     setPhaseDurations({ ...defaultPhaseDurations });
     setPhasePercentages({ ...defaultPhasePercentages });
     setTargetBPM(100);
@@ -627,473 +551,476 @@ const ABCDMetronome = () => {
             />
         </motion.div>
 
+        {/* CONTENITORE PRINCIPALE MODIFICATO PER RIDURRE IL GAP SU DESKTOP (lg:gap-8) */}
         <motion.div
-          className="mt-14 flex flex-col gap-12 lg:grid lg:grid-cols-[1.45fr_1fr] lg:items-start"
+          className="mt-14 flex flex-col gap-12 lg:grid lg:grid-cols-[1.45fr_1fr] lg:items-start lg:gap-8" 
           variants={staggerParent}
           initial="hidden"
           animate="visible"
         >
-          <div className="space-y-10 lg:order-1">
-            <motion.section
-              variants={scaleIn}
-              className="relative overflow-hidden rounded-[32px] border border-white/8 bg-white/5 p-8 shadow-[0_32px_70px_rgba(8,10,12,0.35)] backdrop-blur-xl"
-            >
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_rgba(17,19,22,0.6))] opacity-90" />
-              <div className="relative z-10 space-y-12">
-                <AnimatePresence mode="wait">
-                  {isInBreak ? (
-                    <motion.div
-                      key="break"
-                      initial={{ opacity: 0, y: 30 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.65, ease: 'easeOut' }}
-                      className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur"
-                    >
-                      <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">Preparazione</span>
-                      <div className="mt-6 text-[5.5rem] font-bold text-[#8ab7aa]">
-                        {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
-                      </div>
-                      <p className="text-neutral-400">
-                        {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
-                      </p>
-                    </motion.div>
-                  ) : (
-                    <motion.div key="active" className="space-y-12">
+            {/* COLONNA SINISTRA (Contenuto principale, Settings e Info) */}
+            <div className="lg:col-span-1 flex flex-col gap-12 lg:gap-8">
+              {/* 1. SEZIONE METRONOMO (MOBILE: 1 | DESKTOP: Col. 1, Ordine 1) */}
+              <motion.section
+                variants={scaleIn}
+                className="order-1 lg:order-1 relative overflow-hidden rounded-[32px] border border-white/8 bg-white/5 p-8 shadow-[0_32px_70px_rgba(8,10,12,0.35)] backdrop-blur-xl"
+              >
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_rgba(17,19,22,0.6))] opacity-90" />
+                <div className="relative z-10 space-y-12">
+                  <AnimatePresence mode="wait">
+                    {isInBreak ? (
                       <motion.div
-                        variants={staggerParent}
-                        initial="hidden"
-                        animate="visible"
-                        // Forzato grid 2x2 stabile
-                        className="grid grid-cols-2 gap-3 justify-items-center xl:grid-cols-4 xl:flex xl:flex-wrap xl:justify-start" 
+                        key="break"
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.65, ease: 'easeOut' }}
+                        className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur"
                       >
-                        {phaseOrder.map(key => (
-                          <motion.div
-                            key={key}
-                            variants={pillVariant}
-                            // Classi compattate per garantire 2x2
-                            className={`group flex items-center gap-0.5 rounded-full border border-white/5 px-3.5 py-1.5 text-sm transition ${
-                              currentPhase === key
-                                ? `bg-gradient-to-r ${phaseStyles[key].color} text-white font-semibold shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
-                                : 'bg-white/5 text-neutral-300 hover:text-white'
-                            }`}
-                          >
-                            {/* FIX 3: Iniziale in grassetto e colorata */}
-                            <span className="font-bold" style={{ color: currentPhase === key ? 'white' : phaseStyles[key].accent }}>
-                              {key}
-                            </span>
-                            {/* Il resto del nome è in font leggero */}
-                            <span className={`font-light transition ${currentPhase === key ? 'text-white/80' : 'text-neutral-400'}`}>
-                              {phaseStyles[key].name.substring(1)}
-                            </span>
-                          </motion.div>
-                        ))}
+                        <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">Preparazione</span>
+                        <div className="mt-6 text-[5.5rem] font-bold text-[#8ab7aa]">
+                          {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
+                        </div>
+                        <p className="text-neutral-400">
+                          {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
+                        </p>
                       </motion.div>
+                    ) : (
+                      <motion.div key="active" className="space-y-12">
+                        <motion.div
+                          variants={staggerParent}
+                          initial="hidden"
+                          animate="visible"
+                          className="grid grid-cols-2 gap-3 justify-items-center xl:grid-cols-4 xl:flex xl:flex-wrap xl:justify-start" 
+                        >
+                          {phaseOrder.map(key => (
+                            <motion.div
+                              key={key}
+                              variants={pillVariant}
+                              className={`group flex items-center gap-0.5 rounded-full border border-white/5 px-3.5 py-1.5 text-sm transition ${
+                                currentPhase === key
+                                  ? `bg-gradient-to-r ${phaseStyles[key].color} text-white font-semibold shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
+                                  : 'bg-white/5 text-neutral-300 hover:text-white'
+                              }`}
+                            >
+                              <span className="font-bold" style={{ color: currentPhase === key ? 'white' : phaseStyles[key].accent }}>
+                                {key}
+                              </span>
+                              <span className={`font-light transition ${currentPhase === key ? 'text-white/80' : 'text-neutral-400'}`}>
+                                {phaseStyles[key].name.substring(1)}
+                              </span>
+                            </motion.div>
+                          ))}
+                        </motion.div>
 
-                      <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
-                        <div className="relative mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
-                          <div
-                            className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
-                            style={{
-                              borderColor: beatFlash ? phaseStyles[currentPhase].accent : 'rgba(255,255,255,0.12)',
-                              boxShadow: beatFlash
-                                ? `0 0 70px ${phaseStyles[currentPhase].accent}66, inset 0 0 35px ${phaseStyles[currentPhase].accent}33`
-                                : 'inset 0 0 28px rgba(0,0,0,0.4)'
-                            }}
+                        <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
+                          <div className="relative mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
+                            <div
+                              className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
+                              style={{
+                                borderColor: beatFlash ? phaseStyles[currentPhase].accent : 'rgba(255,255,255,0.12)',
+                                boxShadow: beatFlash
+                                  ? `0 0 70px ${phaseStyles[currentPhase].accent}66, inset 0 0 35px ${phaseStyles[currentPhase].accent}33`
+                                  : 'inset 0 0 28px rgba(0,0,0,0.4)'
+                              }}
+                            />
+                            <div className="relative text-center">
+                              <div className="text-[4.85rem] font-semibold" style={{ color: phaseStyles[currentPhase].accent }}>{getCurrentBPM()}</div>
+                              <div className="text-sm uppercase tracking-[0.4em] text-neutral-400">BPM</div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-6 text-left">
+                            <div>
+                              <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">Sezione attuale</span>
+                              <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
+                                {currentPhase} • {phaseStyles[currentPhase].name}
+                              </h2>
+                              <p className="mt-2 text-sm text-neutral-400">
+                                {subdivisions[subdivision].name} • Target {targetBPM} BPM • Durata {phaseDurations[currentPhase]} min
+                              </p>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
+                              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                                Tempo totale • {formatTime(totalTimeRemaining)}
+                              </span>
+                              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                                {phasePercentages[currentPhase]}% della velocità target
+                              </span>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                                <span>Progressione sezione</span>
+                                <span>{formatTime(timeRemaining)}</span>
+                              </div>
+                              <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-white/5">
+                                <div
+                                  className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[currentPhase].color}`}
+                                  style={{ width: `${(timeRemaining / (phaseDurations[currentPhase] * 60)) * 100}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.section>
+
+              {/* 5. SETTINGS (MOBILE: 5 | DESKTOP: Col. 1, Ordine 2) */}
+              <motion.div
+                variants={scaleIn}
+                className="order-5 lg:order-2 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+              >
+                {/* Pulsante a tutta larghezza */}
+                <button
+                  onClick={() => {
+                    setShowSettings(!showSettings);
+                    setShowInstructions(false); 
+                  }}
+                  className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
+                >
+                  <span>Settings</span>
+                  {showSettings ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {showSettings && (
+                    <motion.div
+                      key="settings-panel"
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.4, ease: 'easeOut' }}
+                      className="mt-6 space-y-8 text-neutral-200"
+                    >
+                      
+                      <div>
+                        <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">BPM Target</label>
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={() => adjustBPM(-1)}
+                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
+                            disabled={isRunning && !isPaused}
+                          >
+                            <Minus size={18} />
+                          </button>
+                          <input
+                            type="range"
+                            value={targetBPM}
+                            onChange={(e) => setTargetBPM(Number(e.target.value))}
+                            className="flex-1 accent-[#3e5c55] [--tw-ring-color:transparent]"
+                            min="40"
+                            max="240"
+                            disabled={isRunning && !isPaused}
                           />
-                          <div className="relative text-center">
-                            <div className="text-[4.85rem] font-semibold" style={{ color: phaseStyles[currentPhase].accent }}>{getCurrentBPM()}</div>
-                            <div className="text-sm uppercase tracking-[0.4em] text-neutral-400">BPM</div>
-                          </div>
+                          <button
+                            onClick={() => adjustBPM(1)}
+                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
+                            disabled={isRunning && !isPaused}
+                          >
+                            <Plus size={18} />
+                          </button>
+                          <div className="w-16 text-right text-2xl font-semibold text-neutral-100">{targetBPM}</div>
                         </div>
+                      </div>
 
-                        <div className="space-y-6 text-left">
-                          <div>
-                            <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">Sezione attuale</span>
-                            <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
-                              {currentPhase} • {phaseStyles[currentPhase].name}
-                            </h2>
-                            <p className="mt-2 text-sm text-neutral-400">
-                              {subdivisions[subdivision].name} • Target {targetBPM} BPM • Durata {phaseDurations[currentPhase]} min
-                            </p>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
-                            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                              Tempo totale • {formatTime(totalTimeRemaining)}
-                            </span>
-                            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                              {phasePercentages[currentPhase]}% della velocità target
-                            </span>
-                          </div>
-
-                          <div>
-                            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                              <span>Progressione sezione</span>
-                              <span>{formatTime(timeRemaining)}</span>
-                            </div>
-                            <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-white/5">
-                              <div
-                                className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[currentPhase].color}`}
-                                style={{ width: `${(timeRemaining / (phaseDurations[currentPhase] * 60)) * 100}%` }}
-                              />
-                            </div>
-                          </div>
+                      <div>
+                        <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Suddivisione</label>
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                          {Object.entries(subdivisions).map(([key, value]) => (
+                            <button
+                              key={key}
+                              onClick={() => setSubdivision(key as typeof subdivision)}
+                              disabled={isRunning && !isPaused}
+                              className={`rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition ${
+                                subdivision === key
+                                  ? 'border-white/20 bg-white/10 text-white'
+                                  : 'border-white/5 bg-transparent text-neutral-400 hover:border-white/20 hover:text-neutral-100'
+                              } ${isRunning && !isPaused ? 'opacity-40 cursor-not-allowed' : ''}`}
+                            >
+                              {value.name}
+                            </button>
+                          ))}
                         </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Durata sezioni (minuti)</label>
+                        <div className="space-y-4">
+                          {phaseOrder.map(key => (
+                            <div key={key}>
+                              <div className={`mb-2 text-xs font-semibold uppercase tracking-[0.35em] ${phaseStyles[key].textColor}`}>
+                                {key} • {phaseStyles[key].name}
+                              </div>
+                              <div className="grid grid-cols-5 gap-2">
+                                {[1, 2, 3, 4, 5].map(mins => (
+                                  <button
+                                    key={mins}
+                                    onClick={() => updatePhaseDuration(key, mins)}
+                                    disabled={isRunning && !isPaused}
+                                    className={`rounded-xl border py-2 text-sm font-semibold transition ${
+                                      phaseDurations[key] === mins
+                                        ? `border-white/20 bg-gradient-to-r ${phaseStyles[key].color} text-white`
+                                        : 'border-white/5 bg-transparent text-neutral-400 hover:border-white/20 hover:text-neutral-100'
+                                    } ${isRunning && !isPaused ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                  >
+                                    {mins}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Percentuali velocità</label>
+                        <div className="grid gap-5 md:grid-cols-2">
+                          {phaseOrder.map(key => (
+                            <div key={key} className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                              <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.35em] text-neutral-400">
+                                <span className={phaseStyles[key].textColor}>{key}</span>
+                                <span>{phasePercentages[key]}%</span>
+                              </div>
+                              {key === 'D' ? (
+                                <p className="text-[11px] text-neutral-500">Fissata a 100% per mantenere il target definitivo.</p>
+                              ) : (
+                                <input
+                                  type="range"
+                                  min="50"
+                                  max="150"
+                                  step="1"
+                                  value={phasePercentages[key]}
+                                  onChange={(e) => updatePhasePercentage(key, Number(e.target.value))}
+                                  className="w-full accent-[#3e5c55] [--tw-ring-color:transparent]"
+                                  disabled={isRunning && !isPaused}
+                                />
+                              )}
+                              <div className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                                {Math.round(targetBPM * getPhasePercentage(key))} BPM previsti
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Pulsante Reset alleggerito nello stile e nel testo */}
+                      <div className="border-t border-white/10 pt-5 space-y-3">
+                          <button
+                              onClick={handleResetDefaults}
+                              // CORREZIONE: Permetti il click anche se è in pausa
+                              disabled={isRunning && !isPaused} 
+                              className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 px-4 py-2 text-sm font-semibold text-neutral-400 transition hover:border-white/20 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                              title="Ripristina durate e percentuali di default"
+                          >
+                              <RefreshCcw size={16} className="text-neutral-500" />
+                              Ripristina Defaults
+                          </button>
+                          <div className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                              {isRunning && !isPaused ? 'Impossibile modificare le impostazioni durante la riproduzione' : 'Tutte le modifiche (BPM, durate, percentuali) verranno riportate ai valori iniziali.'}
+                          </div>
+                      </div>
+                      
+                      <div className="border-t border-white/10 pt-5 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                        Preview BPM per sezione aggiornata in tempo reale
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
-            </motion.section>
-            
-            {/* SEZIONE 1: SETTINGS */}
-            <motion.div
-              variants={scaleIn}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur lg:order-4"
-            >
-              {/* FIX 1: Pulsante a tutta larghezza */}
-              <button
-                onClick={() => {
-                  setShowSettings(!showSettings);
-                  setShowInstructions(false); 
-                }}
-                className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
+              </motion.div>
+
+              {/* 6. INFO & ISTRUZIONI (MOBILE: 6 | DESKTOP: Col. 1, Ordine 3) */}
+              <motion.div
+                variants={scaleIn}
+                className="order-6 lg:order-3 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
               >
-                <span>Settings</span>
-                {showSettings ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              </button>
+                <button
+                  onClick={() => {
+                    setShowInstructions(!showInstructions);
+                    setShowSettings(false); 
+                  }}
+                  className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
+                >
+                  <span className="flex items-center gap-2"><Info size={16} /> Info & Istruzioni</span>
+                  {showInstructions ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
 
-              <AnimatePresence initial={false}>
-                {showSettings && (
-                  <motion.div
-                    key="settings-panel"
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.4, ease: 'easeOut' }}
-                    className="mt-6 space-y-8 text-neutral-200"
-                  >
-                    
-                    <div>
-                      <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">BPM Target</label>
-                      <div className="flex items-center gap-4">
-                        <button
-                          onClick={() => adjustBPM(-1)}
-                          className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
-                          disabled={isRunning && !isPaused}
-                        >
-                          <Minus size={18} />
-                        </button>
-                        <input
-                          type="range"
-                          value={targetBPM}
-                          onChange={(e) => setTargetBPM(Number(e.target.value))}
-                          className="flex-1 accent-[#3e5c55] [--tw-ring-color:transparent]"
-                          min="40"
-                          max="240"
-                          disabled={isRunning && !isPaused}
-                        />
-                        <button
-                          onClick={() => adjustBPM(1)}
-                          className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
-                          disabled={isRunning && !isPaused}
-                        >
-                          <Plus size={18} />
-                        </button>
-                        <div className="w-16 text-right text-2xl font-semibold text-neutral-100">{targetBPM}</div>
+                <AnimatePresence initial={false}>
+                  {showInstructions && (
+                    <motion.div
+                      key="instructions-panel"
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.4, ease: 'easeOut' }}
+                      className="mt-6 space-y-6 text-neutral-300"
+                    >
+                      
+                      <div className="space-y-3">
+                        <h4 className="text-lg font-semibold text-neutral-200">ABCD method = Attenzione, Base, Challenge, Destinazione.</h4>
+                        <p className="text-base text-neutral-400">
+                          Un metodo semplice per studiare in modo più efficace, anche solo 12 minuti al giorno. Ogni sessione ti fa passare da lentezza e precisione, fino alla velocità target, in modo logico e progressivo. È lo stesso principio dell’allenamento sportivo: alternare concentrazione, sforzo e recupero per costruire stabilità.
+                        </p>
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Suddivisione</label>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                        {Object.entries(subdivisions).map(([key, value]) => (
-                          <button
-                            key={key}
-                            onClick={() => setSubdivision(key as typeof subdivision)}
-                            disabled={isRunning && !isPaused}
-                            className={`rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition ${
-                              subdivision === key
-                                ? 'border-white/20 bg-white/10 text-white'
-                                : 'border-white/5 bg-transparent text-neutral-400 hover:border-white/20 hover:text-neutral-100'
-                            } ${isRunning && !isPaused ? 'opacity-40 cursor-not-allowed' : ''}`}
-                          >
-                            {value.name}
-                          </button>
-                        ))}
+                      
+                      <div className="border-t border-white/10 pt-4 space-y-3">
+                        <h4 className="text-lg font-semibold text-neutral-200">Funzionamento</h4>
+                        <p className="text-base text-neutral-400">
+                          Quando premi Play, il metronomo suonerà per i minuti impostati alla velocità della sezione attiva. Alla fine di ogni fase sentirai un countdown e il timer passerà automaticamente alla sezione successiva.
+                          Di default, ogni sezione dura 3 minuti con le velocità: A 70%, B 85%, C 105%, D 100%.
+                        </p>
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Durata sezioni (minuti)</label>
-                      <div className="space-y-4">
-                        {phaseOrder.map(key => (
-                          <div key={key}>
-                            <div className={`mb-2 text-xs font-semibold uppercase tracking-[0.35em] ${phaseStyles[key].textColor}`}>
-                              {key} • {phaseStyles[key].name}
-                            </div>
-                            <div className="grid grid-cols-5 gap-2">
-                              {[1, 2, 3, 4, 5].map(mins => (
-                                <button
-                                  key={mins}
-                                  onClick={() => updatePhaseDuration(key, mins)}
-                                  disabled={isRunning && !isPaused}
-                                  className={`rounded-xl border py-2 text-sm font-semibold transition ${
-                                    phaseDurations[key] === mins
-                                      ? `border-white/20 bg-gradient-to-r ${phaseStyles[key].color} text-white`
-                                      : 'border-white/5 bg-transparent text-neutral-400 hover:border-white/20 hover:text-neutral-100'
-                                  } ${isRunning && !isPaused ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                >
-                                  {mins}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
+                      <div className="border-t border-white/10 pt-4 space-y-3">
+                        <h4 className="text-lg font-semibold text-neutral-200">Struttura Default</h4>
+                        <p className="text-base text-neutral-400 mb-2">4 fasi da 3 minuti ciascuna:</p>
+                        <ul className="list-none space-y-1 pl-0 text-base text-neutral-400">
+                          <li><span className="font-semibold text-neutral-200">A – 70%</span> controllo e meccanica</li>
+                          <li><span className="font-semibold text-neutral-200">B – 85%</span> stabilità e suono</li>
+                          <li><span className="font-semibold text-neutral-200">C – 105%</span> sfida e resistenza</li>
+                          <li><span className="font-semibold text-neutral-200">D – 100%</span> naturalezza e obiettivo</li>
+                        </ul>
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Percentuali velocità</label>
-                      <div className="grid gap-5 md:grid-cols-2">
-                        {phaseOrder.map(key => (
-                          <div key={key} className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-                            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.35em] text-neutral-400">
-                              <span className={phaseStyles[key].textColor}>{key}</span>
-                              <span>{phasePercentages[key]}%</span>
-                            </div>
-                            {key === 'D' ? (
-                              <p className="text-[11px] text-neutral-500">Fissata a 100% per mantenere il target definitivo.</p>
-                            ) : (
-                              <input
-                                type="range"
-                                min="50"
-                                max="150"
-                                step="1"
-                                value={phasePercentages[key]}
-                                onChange={(e) => updatePhasePercentage(key, Number(e.target.value))}
-                                className="w-full accent-[#3e5c55] [--tw-ring-color:transparent]"
-                                disabled={isRunning && !isPaused}
-                              />
-                            )}
-                            <div className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                              {Math.round(targetBPM * getPhasePercentage(key))} BPM previsti
-                            </div>
-                          </div>
-                        ))}
+                      <div className="border-t border-white/10 pt-4 space-y-3">
+                        <h4 className="text-lg font-semibold text-neutral-200">Personalizzazione</h4>
+                        <p className="text-base text-neutral-400">
+                          Puoi modificare durate e velocità come vuoi cliccando la sezione **"Settings"**: qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perchè è ovviamente pari al 100%).
+                        </p>
                       </div>
-                    </div>
 
-                    {/* FIX 2: Pulsante Reset alleggerito nello stile e nel testo */}
-                    <div className="border-t border-white/10 pt-5 space-y-3">
-                        <button
-                            onClick={handleResetDefaults}
-                            disabled={isRunning}
-                            // Stile alleggerito: sfondo più tenue, colore testo più soft.
-                            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 px-4 py-2 text-sm font-semibold text-neutral-400 transition hover:border-white/20 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-                            title="Ripristina durate e percentuali di default"
-                        >
-                            <RefreshCcw size={16} className="text-neutral-500" />
-                            Ripristina Defaults
-                        </button>
-                        <div className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                            {isRunning ? 'Impossibile modificare le impostazioni durante la riproduzione' : 'Tutte le modifiche (BPM, durate, percentuali) verranno riportate ai valori iniziali.'}
-                        </div>
-                    </div>
-                    
-                    <div className="border-t border-white/10 pt-5 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                      Preview BPM per sezione aggiornata in tempo reale
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            </div>
 
-            {/* SEZIONE 2: INFO & ISTRUZIONI (TESTO AGGIORNATO E INGRANDITO) */}
-            <motion.div
-              variants={scaleIn}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur lg:order-5"
-            >
-              <button
-                onClick={() => {
-                  setShowInstructions(!showInstructions);
-                  setShowSettings(false); 
-                }}
-                className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
+            {/* COLONNA DESTRA (Tempo, Controlli e Profilo) */}
+            <div className="lg:col-span-1 flex flex-col gap-12 lg:gap-8">
+              {/* 2. TEMPO COMPLESSIVO (MOBILE: 2 | DESKTOP: Col. 2, Ordine 1) */}
+              <motion.div
+                variants={scaleIn}
+                className="order-2 lg:order-1 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur"
               >
-                <span className="flex items-center gap-2"><Info size={16} /> Info & Istruzioni</span>
-                {showInstructions ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              </button>
-
-              <AnimatePresence initial={false}>
-                {showInstructions && (
-                  <motion.div
-                    key="instructions-panel"
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.4, ease: 'easeOut' }}
-                    className="mt-6 space-y-6 text-neutral-300"
-                  >
-                    
-                    <div className="space-y-3">
-                      <h4 className="text-lg font-semibold text-neutral-200">ABCD method = Attenzione, Base, Challenge, Destinazione.</h4>
-                      <p className="text-base text-neutral-400">
-                        Un metodo semplice per studiare in modo più efficace, anche solo 12 minuti al giorno. Ogni sessione ti fa passare da lentezza e precisione, fino alla velocità target, in modo logico e progressivo. È lo stesso principio dell’allenamento sportivo: alternare concentrazione, sforzo e recupero per costruire stabilità.
-                      </p>
-                    </div>
-                    
-                    <div className="border-t border-white/10 pt-4 space-y-3">
-                      <h4 className="text-lg font-semibold text-neutral-200">Funzionamento</h4>
-                      <p className="text-base text-neutral-400">
-                        Quando premi Play, il metronomo suonerà per i minuti impostati alla velocità della sezione attiva. Alla fine di ogni fase sentirai un countdown e il timer passerà automaticamente alla sezione successiva.
-                        Di default, ogni sezione dura 3 minuti con le velocità: A 70%, B 85%, C 105%, D 100%.
-                      </p>
-                    </div>
-
-                    <div className="border-t border-white/10 pt-4 space-y-3">
-                      <h4 className="text-lg font-semibold text-neutral-200">Struttura Default</h4>
-                      <p className="text-base text-neutral-400 mb-2">4 fasi da 3 minuti ciascuna:</p>
-                      <ul className="list-none space-y-1 pl-0 text-base text-neutral-400">
-                        <li><span className="font-semibold text-neutral-200">A – 70%</span> controllo e meccanica</li>
-                        <li><span className="font-semibold text-neutral-200">B – 85%</span> stabilità e suono</li>
-                        <li><span className="font-semibold text-neutral-200">C – 105%</span> sfida e resistenza</li>
-                        <li><span className="font-semibold text-neutral-200">D – 100%</span> naturalezza e obiettivo</li>
-                      </ul>
-                    </div>
-
-                    <div className="border-t border-white/10 pt-4 space-y-3">
-                      <h4 className="text-lg font-semibold text-neutral-200">Personalizzazione</h4>
-                      <p className="text-base text-neutral-400">
-                        Puoi modificare durate e velocità come vuoi cliccando la sezione **"Settings"**: qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perchè è ovviamente pari al 100%).
-                      </p>
-                    </div>
-
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          </div>
-
-          <motion.aside variants={staggerParent} className="space-y-8 lg:order-2">
-            <motion.div
-              variants={scaleIn}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur lg:order-2"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
-                  <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                  {`Sezione ${currentPhase}: ${phaseDurations[currentPhase]} Min`}
-                </div>
-              </div>
-              {audioError && (
-                <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
-                  {audioError}
-                </div>
-              )}
-            </motion.div>
-
-            <motion.div
-              variants={scaleIn}
-              className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur lg:order-1"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Controlli</span>
-                <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">live</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-4">
-                <button
-                  onClick={handleReset}
-                  className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
-                  title="Reset"
-                  style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.25)}` }}
-                >
-                  <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
-                  <RotateCcw size={22} className="relative" />
-                </button>
-
-                <button
-                  onClick={handleStartStop}
-                  className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
-                    isRunning && !isPaused
-                      ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
-                      : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
-                  }`}
-                >
-                  <span className="absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100" style={{ background: 'linear-gradient(120deg, rgba(255,255,255,0.25), rgba(255,255,255,0))' }} />
-                  {isRunning && !isPaused ? <Pause size={24} className="relative" /> : <Play size={24} className="relative" />}
-                  <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
-                </button>
-
-                <button
-                  onClick={() => goToNextPhase(true)}
-                  disabled={!isRunning || isInBreak || currentPhase === 'D'}
-                  className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                  title="Sezione successiva"
-                >
-                  <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
-                  <SkipForward size={22} className="relative" />
-                </button>
-              </div>
-              
-              <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
-                <Volume2 size={16} className="text-neutral-400" />
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={volume}
-                  onChange={(e) => setVolume(Number(e.target.value))}
-                  className="flex-1 accent-[#3e5c55] [--tw-ring-color:transparent]"
-                />
-                <span className="w-10 text-right text-xs text-neutral-400">{Math.round(volume * 100)}%</span>
-              </div>
-            </motion.div>
-
-            <motion.div
-              variants={scaleIn}
-              className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur lg:order-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Profilo fasi</span>
-                <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">overview</span>
-              </div>
-              <div className="space-y-5">
-                {phaseOrder.map(key => (
-                  <div key={key} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm font-semibold text-neutral-200">
-                      <span>{key} • {phaseStyles[key].name}</span>
-                      <span className="text-neutral-400">{Math.round(targetBPM * getPhasePercentage(key))} BPM</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                      <span>{phaseDurations[key]} min</span>
-                      <span>{phasePercentages[key]}%</span>
-                    </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5 relative">
-                      <div
-                        className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[key].color}`}
-                        style={{ width: `${Math.min(phasePercentages[key], 100) / 150 * 100}%` }}
-                      />
-                      {phasePercentages[key] > 100 && (
-                        <div
-                          className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-orange-500 to-red-600"
-                          style={{ 
-                            width: `${((phasePercentages[key] - 100) / 150) * 100}%`,
-                            marginLeft: `${(100 / 150) * 100}%`
-                          }}
-                        />
-                      )}
-                    </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
+                    <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
                   </div>
-                ))}
-              </div>
-            </motion.div>
-          </motion.aside>
+                  <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                    {`Sezione ${currentPhase}: ${phaseDurations[currentPhase]} Min`}
+                  </div>
+                </div>
+                {audioError && (
+                  <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
+                    {audioError}
+                  </div>
+                )}
+              </motion.div>
+
+              {/* 3. CONTROLLI (MOBILE: 3 | DESKTOP: Col. 2, Ordine 2) */}
+              <motion.div
+                variants={scaleIn}
+                className="order-3 lg:order-2 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Controlli</span>
+                  <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">live</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-4">
+                  <button
+                    onClick={handleReset}
+                    className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
+                    title="Reset"
+                    style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.25)}` }}
+                  >
+                    <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
+                    <RotateCcw size={22} className="relative" />
+                  </button>
+
+                  <button
+                    onClick={handleStartStop}
+                    className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
+                      isRunning && !isPaused
+                        ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
+                        : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
+                    }`}
+                  >
+                    <span className="absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100" style={{ background: 'linear-gradient(120deg, rgba(255,255,255,0.25), rgba(255,255,255,0))' }} />
+                    {isRunning && !isPaused ? <Pause size={24} className="relative" /> : <Play size={24} className="relative" />}
+                    <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => goToNextPhase(true)}
+                    disabled={!isRunning || isInBreak || currentPhase === 'D'}
+                    className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    title="Sezione successiva"
+                  >
+                    <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
+                    <SkipForward size={22} className="relative" />
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
+                  <Volume2 size={16} className="text-neutral-400" />
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={volume}
+                    onChange={(e) => setVolume(Number(e.target.value))}
+                    className="flex-1 accent-[#3e5c55] [--tw-ring-color:transparent]"
+                  />
+                  <span className="w-10 text-right text-xs text-neutral-400">{Math.round(volume * 100)}%</span>
+                </div>
+              </motion.div>
+
+              {/* 4. PROFILO FASI (MOBILE: 4 | DESKTOP: Col. 2, Ordine 3) */}
+              <motion.div
+                variants={scaleIn}
+                className="order-4 lg:order-3 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Profilo fasi</span>
+                  <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">overview</span>
+                </div>
+                <div className="space-y-5">
+                  {phaseOrder.map(key => (
+                    <div key={key} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm font-semibold text-neutral-200">
+                        <span>{key} • {phaseStyles[key].name}</span>
+                        <span className="text-neutral-400">{Math.round(targetBPM * getPhasePercentage(key))} BPM</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                        <span>{phaseDurations[key]} min</span>
+                        <span>{phasePercentages[key]}%</span>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5 relative">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[key].color}`}
+                          style={{ width: `${Math.min(phasePercentages[key], 100) / 150 * 100}%` }}
+                        />
+                        {phasePercentages[key] > 100 && (
+                          <div
+                            className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-orange-500 to-red-600"
+                            style={{ 
+                              width: `${((phasePercentages[key] - 100) / 150) * 100}%`,
+                              marginLeft: `${(100 / 150) * 100}%`
+                            }}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            </div>
         </motion.div>
 
         <motion.footer
