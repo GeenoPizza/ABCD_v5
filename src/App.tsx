@@ -107,7 +107,7 @@ const ABCDMetronome = () => {
 
   const subdivisions = {
     quarter: { name: '♩ 1/4', beats: 1 },
-    eighth: { name: '♫ 1/8', beats: 2 },
+    eighth: { name: '♪♪ 1/8', beats: 2 },
     triplet: { name: '♪♪♪ Triplet', sup: '3', beats: 3 },
     sixteenth: { name: '♬♬ 1/16', beats: 4 }
   } as const;
