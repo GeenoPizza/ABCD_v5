@@ -1,5 +1,6 @@
 import { easeInOut } from "framer-motion";
 import { useState, useEffect, useRef, useMemo } from "react";
+// L'errore è risolto qui, 'Play' è ora utilizzato:
 import { Play, Pause, SkipForward, RotateCcw, ChevronDown, ChevronUp, Plus, Minus, Volume2, Info, RefreshCcw } from 'lucide-react'; 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -456,7 +457,6 @@ const ABCDMetronome = () => {
   };
 
   const handleResetDefaults = () => {
-    // CORREZIONE: Permetti il reset se il metronomo è fermo O se è in pausa
     if (isRunning && !isPaused) return; 
     setPhaseDurations({ ...defaultPhaseDurations });
     setPhasePercentages({ ...defaultPhasePercentages });
@@ -551,167 +551,164 @@ const ABCDMetronome = () => {
             />
         </motion.div>
 
-        {/* CONTENITORE PRINCIPALE CORRETTO: Flexbox per Desktop, Flexbox per Mobile. */}
-        {/* Su mobile, è una colonna (flex-col). Su desktop (lg:), diventa una riga (flex-row) con colonne auto-allineate in verticale (items-start), non allungate. */}
+        {/* CONTENITORE PRINCIPALE (GESTISCE L'ORDINE MOBILE E IL LAYOUT DESKTOP COMPATTO) */}
         <motion.div
-          className="mt-14 flex flex-col gap-12 lg:flex-row lg:items-start lg:gap-8" 
-          variants={staggerParent}
-          initial="hidden"
-          animate="visible"
+            className="mt-14 flex flex-col gap-8 lg:flex-row lg:justify-between" 
+            variants={staggerParent}
+            initial="hidden"
+            animate="visible"
         >
-            
-            {/* COLONNA SINISTRA (Contenuto principale, 8/12 di larghezza su desktop) */}
-            <div className="flex w-full flex-col gap-8 lg:w-8/12">
-                
-                {/* 1. SEZIONE METRONOMO: order-1 (Mobile: 1) */}
+            {/* COLONNA DI SINISTRA (8/12 - Metronomo, Settings, Info) */}
+            <div className="flex flex-col gap-8 lg:w-8/12">
+                {/* 1. SEZIONE METRONOMO: order-1 (Mobile) */}
                 <motion.section
                     variants={scaleIn}
                     className="order-1 relative overflow-hidden rounded-[32px] border border-white/8 bg-white/5 p-8 shadow-[0_32px_70px_rgba(8,10,12,0.35)] backdrop-blur-xl"
                 >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_rgba(17,19,22,0.6))] opacity-90" />
                     <div className="relative z-10 space-y-12">
-                      <AnimatePresence mode="wait">
+                    <AnimatePresence mode="wait">
                         {isInBreak ? (
-                          <motion.div
+                        <motion.div
                             key="break"
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
                             transition={{ duration: 0.65, ease: 'easeOut' }}
                             className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur"
-                          >
+                        >
                             <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">Preparazione</span>
                             <div className="mt-6 text-[5.5rem] font-bold text-[#8ab7aa]">
-                              {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
+                            {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
                             </div>
                             <p className="text-neutral-400">
-                              {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
+                            {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
                             </p>
-                          </motion.div>
+                        </motion.div>
                         ) : (
-                          <motion.div key="active" className="space-y-12">
+                        <motion.div key="active" className="space-y-12">
                             <motion.div
-                              variants={staggerParent}
-                              initial="hidden"
-                              animate="visible"
-                              className="grid grid-cols-2 gap-3 justify-items-center xl:grid-cols-4 xl:flex xl:flex-wrap xl:justify-start" 
+                            variants={staggerParent}
+                            initial="hidden"
+                            animate="visible"
+                            className="grid grid-cols-2 gap-3 justify-items-center xl:grid-cols-4 xl:flex xl:flex-wrap xl:justify-start" 
                             >
-                              {phaseOrder.map(key => (
+                            {phaseOrder.map(key => (
                                 <motion.div
-                                  key={key}
-                                  variants={pillVariant}
-                                  className={`group flex items-center gap-0.5 rounded-full border border-white/5 px-3.5 py-1.5 text-sm transition ${
+                                key={key}
+                                variants={pillVariant}
+                                className={`group flex items-center gap-0.5 rounded-full border border-white/5 px-3.5 py-1.5 text-sm transition ${
                                     currentPhase === key
-                                      ? `bg-gradient-to-r ${phaseStyles[key].color} text-white font-semibold shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
-                                      : 'bg-white/5 text-neutral-300 hover:text-white'
-                                  }`}
+                                    ? `bg-gradient-to-r ${phaseStyles[key].color} text-white font-semibold shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
+                                    : 'bg-white/5 text-neutral-300 hover:text-white'
+                                }`}
                                 >
-                                  <span className="font-bold" style={{ color: currentPhase === key ? 'white' : phaseStyles[key].accent }}>
+                                <span className="font-bold" style={{ color: currentPhase === key ? 'white' : phaseStyles[key].accent }}>
                                     {key}
-                                  </span>
-                                  <span className={`font-light transition ${currentPhase === key ? 'text-white/80' : 'text-neutral-400'}`}>
+                                </span>
+                                <span className={`font-light transition ${currentPhase === key ? 'text-white/80' : 'text-neutral-400'}`}>
                                     {phaseStyles[key].name.substring(1)}
-                                  </span>
+                                </span>
                                 </motion.div>
-                              ))}
+                            ))}
                             </motion.div>
 
                             <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
-                              <div className="relative mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
+                            <div className="relative mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
                                 <div
-                                  className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
-                                  style={{
+                                className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
+                                style={{
                                     borderColor: beatFlash ? phaseStyles[currentPhase].accent : 'rgba(255,255,255,0.12)',
                                     boxShadow: beatFlash
-                                      ? `0 0 70px ${phaseStyles[currentPhase].accent}66, inset 0 0 35px ${phaseStyles[currentPhase].accent}33`
-                                      : 'inset 0 0 28px rgba(0,0,0,0.4)'
-                                  }}
+                                    ? `0 0 70px ${phaseStyles[currentPhase].accent}66, inset 0 0 35px ${phaseStyles[currentPhase].accent}33`
+                                    : 'inset 0 0 28px rgba(0,0,0,0.4)'
+                                }}
                                 />
                                 <div className="relative text-center">
-                                  <div className="text-[4.85rem] font-semibold" style={{ color: phaseStyles[currentPhase].accent }}>{getCurrentBPM()}</div>
-                                  <div className="text-sm uppercase tracking-[0.4em] text-neutral-400">BPM</div>
+                                <div className="text-[4.85rem] font-semibold" style={{ color: phaseStyles[currentPhase].accent }}>{getCurrentBPM()}</div>
+                                <div className="text-sm uppercase tracking-[0.4em] text-neutral-400">BPM</div>
                                 </div>
-                              </div>
+                            </div>
 
-                              <div className="space-y-6 text-left">
+                            <div className="space-y-6 text-left">
                                 <div>
-                                  <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">Sezione attuale</span>
-                                  <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
+                                <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">Sezione attuale</span>
+                                <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
                                     {currentPhase} • {phaseStyles[currentPhase].name}
-                                  </h2>
-                                  <p className="mt-2 text-sm text-neutral-400">
+                                </h2>
+                                <p className="mt-2 text-sm text-neutral-400">
                                     {subdivisions[subdivision].name} • Target {targetBPM} BPM • Durata {phaseDurations[currentPhase]} min
-                                  </p>
+                                </p>
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
-                                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
                                     Tempo totale • {formatTime(totalTimeRemaining)}
-                                  </span>
-                                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                                </span>
+                                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
                                     {phasePercentages[currentPhase]}% della velocità target
-                                  </span>
+                                </span>
                                 </div>
 
                                 <div>
-                                  <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
                                     <span>Progressione sezione</span>
                                     <span>{formatTime(timeRemaining)}</span>
-                                  </div>
-                                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-white/5">
-                                    <div
-                                      className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[currentPhase].color}`}
-                                      style={{ width: `${(timeRemaining / (phaseDurations[currentPhase] * 60)) * 100}%` }}
-                                    />
-                                  </div>
                                 </div>
-                              </div>
+                                <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-white/5">
+                                    <div
+                                    className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[currentPhase].color}`}
+                                    style={{ width: `${(timeRemaining / (phaseDurations[currentPhase] * 60)) * 100}%` }}
+                                    />
+                                </div>
+                                </div>
                             </div>
-                          </motion.div>
+                            </div>
+                        </motion.div>
                         )}
-                      </AnimatePresence>
+                    </AnimatePresence>
                     </div>
                 </motion.section>
 
-                {/* 5. SETTINGS: order-5 (Mobile: 5) */}
+                {/* 5. SETTINGS: order-5 (Mobile) */}
                 <motion.div
                     variants={scaleIn}
                     className="order-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     {/* Pulsante a tutta larghezza */}
                     <button
-                      onClick={() => {
+                    onClick={() => {
                         setShowSettings(!showSettings);
                         setShowInstructions(false); 
-                      }}
-                      className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
+                    }}
+                    className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
                     >
-                      <span>Settings</span>
-                      {showSettings ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    <span>Settings</span>
+                    {showSettings ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
 
                     <AnimatePresence initial={false}>
-                      {showSettings && (
+                    {showSettings && (
                         <motion.div
-                          key="settings-panel"
-                          initial={{ opacity: 0, y: -20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.4, ease: 'easeOut' }}
-                          className="mt-6 space-y-8 text-neutral-200"
+                        key="settings-panel"
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.4, ease: 'easeOut' }}
+                        className="mt-6 space-y-8 text-neutral-200"
                         >
-                          
-                          <div>
+                        
+                        <div>
                             <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">BPM Target</label>
                             <div className="flex items-center gap-4">
-                              <button
+                            <button
                                 onClick={() => adjustBPM(-1)}
                                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
                                 disabled={isRunning && !isPaused}
-                              >
+                            >
                                 <Minus size={18} />
-                              </button>
-                              <input
+                            </button>
+                            <input
                                 type="range"
                                 value={targetBPM}
                                 onChange={(e) => setTargetBPM(Number(e.target.value))}
@@ -719,259 +716,261 @@ const ABCDMetronome = () => {
                                 min="40"
                                 max="240"
                                 disabled={isRunning && !isPaused}
-                              />
-                              <button
+                            />
+                            <button
                                 onClick={() => adjustBPM(1)}
                                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
                                 disabled={isRunning && !isPaused}
-                              >
+                            >
                                 <Plus size={18} />
-                              </button>
-                              <div className="w-16 text-right text-2xl font-semibold text-neutral-100">{targetBPM}</div>
+                            </button>
+                            <div className="w-16 text-right text-2xl font-semibold text-neutral-100">{targetBPM}</div>
                             </div>
-                          </div>
+                        </div>
 
-                          <div>
+                        <div>
                             <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Suddivisione</label>
                             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                              {Object.entries(subdivisions).map(([key, value]) => (
+                            {Object.entries(subdivisions).map(([key, value]) => (
                                 <button
-                                  key={key}
-                                  onClick={() => setSubdivision(key as typeof subdivision)}
-                                  disabled={isRunning && !isPaused}
-                                  className={`rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition ${
+                                key={key}
+                                onClick={() => setSubdivision(key as typeof subdivision)}
+                                disabled={isRunning && !isPaused}
+                                className={`rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition ${
                                     subdivision === key
-                                      ? 'border-white/20 bg-white/10 text-white'
-                                      : 'border-white/5 bg-transparent text-neutral-400 hover:border-white/20 hover:text-neutral-100'
-                                  } ${isRunning && !isPaused ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                    ? 'border-white/20 bg-white/10 text-white'
+                                    : 'border-white/5 bg-transparent text-neutral-400 hover:border-white/20 hover:text-neutral-100'
+                                } ${isRunning && !isPaused ? 'opacity-40 cursor-not-allowed' : ''}`}
                                 >
-                                  {value.name}
+                                {value.name}
                                 </button>
-                              ))}
+                            ))}
                             </div>
-                          </div>
+                        </div>
 
-                          <div>
+                        <div>
                             <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Durata sezioni (minuti)</label>
                             <div className="space-y-4">
-                              {phaseOrder.map(key => (
+                            {phaseOrder.map(key => (
                                 <div key={key}>
-                                  <div className={`mb-2 text-xs font-semibold uppercase tracking-[0.35em] ${phaseStyles[key].textColor}`}>
+                                <div className={`mb-2 text-xs font-semibold uppercase tracking-[0.35em] ${phaseStyles[key].textColor}`}>
                                     {key} • {phaseStyles[key].name}
-                                  </div>
-                                  <div className="grid grid-cols-5 gap-2">
+                                </div>
+                                <div className="grid grid-cols-5 gap-2">
                                     {[1, 2, 3, 4, 5].map(mins => (
-                                      <button
+                                    <button
                                         key={mins}
                                         onClick={() => updatePhaseDuration(key, mins)}
                                         disabled={isRunning && !isPaused}
                                         className={`rounded-xl border py-2 text-sm font-semibold transition ${
-                                          phaseDurations[key] === mins
+                                        phaseDurations[key] === mins
                                             ? `border-white/20 bg-gradient-to-r ${phaseStyles[key].color} text-white`
                                             : 'border-white/5 bg-transparent text-neutral-400 hover:border-white/20 hover:text-neutral-100'
                                         } ${isRunning && !isPaused ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                      >
+                                    >
                                         {mins}
-                                      </button>
+                                    </button>
                                     ))}
-                                  </div>
                                 </div>
-                              ))}
+                                </div>
+                            ))}
                             </div>
-                          </div>
+                        </div>
 
-                          <div>
+                        <div>
                             <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Percentuali velocità</label>
                             <div className="grid gap-5 md:grid-cols-2">
-                              {phaseOrder.map(key => (
+                            {phaseOrder.map(key => (
                                 <div key={key} className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-                                  <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.35em] text-neutral-400">
+                                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.35em] text-neutral-400">
                                     <span className={phaseStyles[key].textColor}>{key}</span>
                                     <span>{phasePercentages[key]}%</span>
-                                  </div>
-                                  {key === 'D' ? (
-                                    <p className="text-[11px] text-neutral-500">Fissata a 100% per mantenere il target definitivo.</p>
-                                  ) : (
-                                    <input
-                                      type="range"
-                                      min="50"
-                                      max="150"
-                                      step="1"
-                                      value={phasePercentages[key]}
-                                      onChange={(e) => updatePhasePercentage(key, Number(e.target.value))}
-                                      className="w-full accent-[#3e5c55] [--tw-ring-color:transparent]"
-                                      disabled={isRunning && !isPaused}
-                                    />
-                                  )}
-                                  <div className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                                    {Math.round(targetBPM * getPhasePercentage(key))} BPM previsti
-                                  </div>
                                 </div>
-                              ))}
+                                {key === 'D' ? (
+                                    <p className="text-[11px] text-neutral-500">Fissata a 100% per mantenere il target definitivo.</p>
+                                ) : (
+                                    <input
+                                    type="range"
+                                    min="50"
+                                    max="150"
+                                    step="1"
+                                    value={phasePercentages[key]}
+                                    onChange={(e) => updatePhasePercentage(key, Number(e.target.value))}
+                                    className="w-full accent-[#3e5c55] [--tw-ring-color:transparent]"
+                                    disabled={isRunning && !isPaused}
+                                    />
+                                )}
+                                <div className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                                    {Math.round(targetBPM * getPhasePercentage(key))} BPM previsti
+                                </div>
+                                </div>
+                            ))}
                             </div>
-                          </div>
+                        </div>
 
-                          {/* Pulsante Reset alleggerito nello stile e nel testo */}
-                          <div className="border-t border-white/10 pt-5 space-y-3">
-                              <button
-                                  onClick={handleResetDefaults}
-                                  // CORREZIONE: Permetti il click anche se è in pausa
-                                  disabled={isRunning && !isPaused} 
-                                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 px-4 py-2 text-sm font-semibold text-neutral-400 transition hover:border-white/20 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
-                                  title="Ripristina durate e percentuali di default"
-                              >
-                                  <RefreshCcw size={16} className="text-neutral-500" />
-                                  Ripristina Defaults
-                              </button>
-                              <div className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                                  {isRunning && !isPaused ? 'Impossibile modificare le impostazioni durante la riproduzione' : 'Tutte le modifiche (BPM, durate, percentuali) verranno riportate ai valori iniziali.'}
-                              </div>
-                          </div>
-                          
-                          <div className="border-t border-white/10 pt-5 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                        {/* Pulsante Reset alleggerito nello stile e nel testo */}
+                        <div className="border-t border-white/10 pt-5 space-y-3">
+                            <button
+                                onClick={handleResetDefaults}
+                                disabled={isRunning && !isPaused} 
+                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 px-4 py-2 text-sm font-semibold text-neutral-400 transition hover:border-white/20 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="Ripristina durate e percentuali di default"
+                            >
+                                <RefreshCcw size={16} className="text-neutral-500" />
+                                Ripristina Defaults
+                            </button>
+                            <div className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                                {isRunning && !isPaused ? 'Impossibile modificare le impostazioni durante la riproduzione' : 'Tutte le modifiche (BPM, durate, percentuali) verranno riportate ai valori iniziali.'}
+                            </div>
+                        </div>
+                        
+                        <div className="border-t border-white/10 pt-5 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
                             Preview BPM per sezione aggiornata in tempo reale
-                          </div>
+                        </div>
                         </motion.div>
-                      )}
+                    )}
                     </AnimatePresence>
                 </motion.div>
 
-                {/* 6. INFO & ISTRUZIONI: order-6 (Mobile: 6) */}
+                {/* 6. INFO & ISTRUZIONI: order-6 (Mobile) */}
                 <motion.div
                     variants={scaleIn}
                     className="order-6 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     <button
-                      onClick={() => {
+                    onClick={() => {
                         setShowInstructions(!showInstructions);
                         setShowSettings(false); 
-                      }}
-                      className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
+                    }}
+                    className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
                     >
-                      <span className="flex items-center gap-2"><Info size={16} /> Info & Istruzioni</span>
-                      {showInstructions ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    <span className="flex items-center gap-2"><Info size={16} /> Info & Istruzioni</span>
+                    {showInstructions ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
 
                     <AnimatePresence initial={false}>
-                      {showInstructions && (
+                    {showInstructions && (
                         <motion.div
-                          key="instructions-panel"
-                          initial={{ opacity: 0, y: -20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.4, ease: 'easeOut' }}
-                          className="mt-6 space-y-6 text-neutral-300"
+                        key="instructions-panel"
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.4, ease: 'easeOut' }}
+                        className="mt-6 space-y-6 text-neutral-300"
                         >
-                          
-                          <div className="space-y-3">
+                        
+                        <div className="space-y-3">
                             <h4 className="text-lg font-semibold text-neutral-200">ABCD method = Attenzione, Base, Challenge, Destinazione.</h4>
                             <p className="text-base text-neutral-400">
-                              Un metodo semplice per studiare in modo più efficace, anche solo 12 minuti al giorno. Ogni sessione ti fa passare da lentezza e precisione, fino alla velocità target, in modo logico e progressivo. È lo stesso principio dell’allenamento sportivo: alternare concentrazione, sforzo e recupero per costruire stabilità.
+                            Un metodo semplice per studiare in modo più efficace, anche solo 12 minuti al giorno. Ogni sessione ti fa passare da lentezza e precisione, fino alla velocità target, in modo logico e progressivo. È lo stesso principio dell’allenamento sportivo: alternare concentrazione, sforzo e recupero per costruire stabilità.
                             </p>
-                          </div>
-                          
-                          <div className="border-t border-white/10 pt-4 space-y-3">
+                        </div>
+                        
+                        <div className="border-t border-white/10 pt-4 space-y-3">
                             <h4 className="text-lg font-semibold text-neutral-200">Funzionamento</h4>
                             <p className="text-base text-neutral-400">
-                              Quando premi Play, il metronomo suonerà per i minuti impostati alla velocità della sezione attiva. Alla fine di ogni fase sentirai un countdown e il timer passerà automaticamente alla sezione successiva.
-                              Di default, ogni sezione dura 3 minuti con le velocità: A 70%, B 85%, C 105%, D 100%.
+                            Quando premi Play, il metronomo suonerà per i minuti impostati alla velocità della sezione attiva. Alla fine di ogni fase sentirai un countdown e il timer passerà automaticamente alla sezione successiva.
+                            Di default, ogni sezione dura 3 minuti con le velocità: A 70%, B 85%, C 105%, D 100%.
                             </p>
-                          </div>
+                        </div>
 
-                          <div className="border-t border-white/10 pt-4 space-y-3">
+                        <div className="border-t border-white/10 pt-4 space-y-3">
                             <h4 className="text-lg font-semibold text-neutral-200">Struttura Default</h4>
                             <p className="text-base text-neutral-400 mb-2">4 fasi da 3 minuti ciascuna:</p>
                             <ul className="list-none space-y-1 pl-0 text-base text-neutral-400">
-                              <li><span className="font-semibold text-neutral-200">A – 70%</span> controllo e meccanica</li>
-                              <li><span className="font-semibold text-neutral-200">B – 85%</span> stabilità e suono</li>
-                              <li><span className="font-semibold text-neutral-200">C – 105%</span> sfida e resistenza</li>
-                              <li><span className="font-semibold text-neutral-200">D – 100%</span> naturalezza e obiettivo</li>
+                            <li><span className="font-semibold text-neutral-200">A – 70%</span> controllo e meccanica</li>
+                            <li><span className="font-semibold text-neutral-200">B – 85%</span> stabilità e suono</li>
+                            <li><span className="font-semibold text-neutral-200">C – 105%</span> sfida e resistenza</li>
+                            <li><span className="font-semibold text-neutral-200">D – 100%</span> naturalezza e obiettivo</li>
                             </ul>
-                          </div>
+                        </div>
 
-                          <div className="border-t border-white/10 pt-4 space-y-3">
+                        <div className="border-t border-white/10 pt-4 space-y-3">
                             <h4 className="text-lg font-semibold text-neutral-200">Personalizzazione</h4>
                             <p className="text-base text-neutral-400">
-                              Puoi modificare durate e velocità come vuoi cliccando la sezione **"Settings"**: qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perchè è ovviamente pari al 100%).
+                            Puoi modificare durate e velocità come vuoi cliccando la sezione **"Settings"**: qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perchè è ovviamente pari al 100%).
                             </p>
-                          </div>
+                        </div>
 
                         </motion.div>
-                      )}
+                    )}
                     </AnimatePresence>
                 </motion.div>
             </div>
-
-            {/* COLONNA DESTRA (Contenuto secondario, 4/12 di larghezza su desktop) */}
-            <div className="flex w-full flex-col gap-8 lg:w-4/12">
-                {/* 2. TEMPO COMPLESSIVO: order-2 (Mobile: 2) */}
+            
+            {/* COLONNA DI DESTRA (4/12 - Tempo, Controlli, Profilo) */}
+            <div className="flex flex-col gap-8 lg:w-4/12">
+                {/* 2. TEMPO COMPLESSIVO: order-2 (Mobile) */}
                 <motion.div
                     variants={scaleIn}
                     className="order-2 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur"
                 >
                     <div className="flex items-center justify-between">
-                      <div>
+                    <div>
                         <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
                         <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
                         {`Sezione ${currentPhase}: ${phaseDurations[currentPhase]} Min`}
-                      </div>
+                    </div>
                     </div>
                     {audioError && (
-                      <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
+                    <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
                         {audioError}
-                      </div>
+                    </div>
                     )}
                 </motion.div>
                 
-                {/* 3. CONTROLLI: order-3 (Mobile: 3) */}
+                {/* 3. CONTROLLI: order-3 (Mobile) */}
                 <motion.div
                     variants={scaleIn}
                     className="order-3 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Controlli</span>
-                      <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">live</span>
+                    <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Controlli</span>
+                    <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">live</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
-                      <button
+                    <button
                         onClick={handleReset}
                         className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
                         title="Reset"
                         style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.25)}` }}
-                      >
+                    >
                         <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
                         <RotateCcw size={22} className="relative" />
-                      </button>
+                    </button>
 
-                      <button
+                    <button
                         onClick={handleStartStop}
                         className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
-                          isRunning && !isPaused
+                        isRunning && !isPaused
                             ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
                             : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
                         }`}
-                      >
-                        <span className="absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100" style={{ background: 'linear-gradient(120deg, rgba(255,255,255,0.25), rgba(255,255,255,0))' }} />
-                        {isRunning && !isPaused ? <Pause size={24} className="relative" /> : <Play size={24} className="relative" />}
+                    >
+                        {/* LOGICA ICONA CORRETTA: Mostra Pause se in esecuzione, Play altrimenti (fermato o in pausa) */}
+                        {isRunning && !isPaused 
+                            ? <Pause size={24} className="relative" /> 
+                            : <Play size={24} className="relative" />}
+                        {/* LOGICA TESTO */}
                         <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
-                      </button>
+                    </button>
 
-                      <button
+                    <button
                         onClick={() => goToNextPhase(true)}
                         disabled={!isRunning || isInBreak || currentPhase === 'D'}
                         className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         title="Sezione successiva"
-                      >
+                    >
                         <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
                         <SkipForward size={22} className="relative" />
-                      </button>
+                    </button>
                     </div>
                     
                     <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
-                      <Volume2 size={16} className="text-neutral-400" />
-                      <input
+                    <Volume2 size={16} className="text-neutral-400" />
+                    <input
                         type="range"
                         min="0"
                         max="1"
@@ -979,48 +978,48 @@ const ABCDMetronome = () => {
                         value={volume}
                         onChange={(e) => setVolume(Number(e.target.value))}
                         className="flex-1 accent-[#3e5c55] [--tw-ring-color:transparent]"
-                      />
-                      <span className="w-10 text-right text-xs text-neutral-400">{Math.round(volume * 100)}%</span>
+                    />
+                    <span className="w-10 text-right text-xs text-neutral-400">{Math.round(volume * 100)}%</span>
                     </div>
                 </motion.div>
 
-                {/* 4. PROFILO FASI: order-4 (Mobile: 4) */}
+                {/* 4. PROFILO FASI: order-4 (Mobile) */}
                 <motion.div
                     variants={scaleIn}
                     className="order-4 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Profilo fasi</span>
-                      <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">overview</span>
+                    <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Profilo fasi</span>
+                    <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">overview</span>
                     </div>
                     <div className="space-y-5">
-                      {phaseOrder.map(key => (
+                    {phaseOrder.map(key => (
                         <div key={key} className="space-y-2">
-                          <div className="flex items-center justify-between text-sm font-semibold text-neutral-200">
+                        <div className="flex items-center justify-between text-sm font-semibold text-neutral-200">
                             <span>{key} • {phaseStyles[key].name}</span>
                             <span className="text-neutral-400">{Math.round(targetBPM * getPhasePercentage(key))} BPM</span>
-                          </div>
-                          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
                             <span>{phaseDurations[key]} min</span>
                             <span>{phasePercentages[key]}%</span>
-                          </div>
-                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5 relative">
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5 relative">
                             <div
-                              className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[key].color}`}
-                              style={{ width: `${Math.min(phasePercentages[key], 100) / 150 * 100}%` }}
+                            className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[key].color}`}
+                            style={{ width: `${Math.min(phasePercentages[key], 100) / 150 * 100}%` }}
                             />
                             {phasePercentages[key] > 100 && (
-                              <div
+                            <div
                                 className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-orange-500 to-red-600"
                                 style={{ 
-                                  width: `${((phasePercentages[key] - 100) / 150) * 100}%`,
-                                  marginLeft: `${(100 / 150) * 100}%`
+                                width: `${((phasePercentages[key] - 100) / 150) * 100}%`,
+                                marginLeft: `${(100 / 150) * 100}%`
                                 }}
-                              />
+                            />
                             )}
-                          </div>
                         </div>
-                      ))}
+                        </div>
+                    ))}
                     </div>
                 </motion.div>
             </div>
