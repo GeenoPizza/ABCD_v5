@@ -560,10 +560,10 @@ const ABCDMetronome = () => {
         >
             {/* COLONNA DI SINISTRA (8/12 - Metronomo, Settings, Info) */}
             <div className="flex flex-col gap-8 lg:w-8/12">
-                {/* 1. SEZIONE METRONOMO: order-1 (Mobile/Desktop) */}
+                {/* 1. SEZIONE METRONOMO: order-1 (Mobile) */}
                 <motion.section
                     variants={scaleIn}
-                    className="order-1 lg:order-1 relative overflow-hidden rounded-[32px] border border-white/8 bg-white/5 p-8 shadow-[0_32px_70px_rgba(8,10,12,0.35)] backdrop-blur-xl"
+                    className="order-1 relative overflow-hidden rounded-[32px] border border-white/8 bg-white/5 p-8 shadow-[0_32px_70px_rgba(8,10,12,0.35)] backdrop-blur-xl"
                 >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_rgba(17,19,22,0.6))] opacity-90" />
                     <div className="relative z-10 space-y-12">
@@ -669,11 +669,11 @@ const ABCDMetronome = () => {
                     </AnimatePresence>
                     </div>
                 </motion.section>
-                
-                {/* 5. SETTINGS: order-99 (Mobile) / lg:order-2 (Desktop) */}
+
+                {/* 5. SETTINGS: order-5 (Mobile) */}
                 <motion.div
                     variants={scaleIn}
-                    className="order-99 lg:order-2 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+                    className="order-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     {/* Pulsante a tutta larghezza */}
                     <button
@@ -832,10 +832,10 @@ const ABCDMetronome = () => {
                     </AnimatePresence>
                 </motion.div>
 
-                {/* 6. INFO & ISTRUZIONI: order-100 (Mobile) / lg:order-3 (Desktop) */}
+                {/* 6. INFO & ISTRUZIONI: order-6 (Mobile) */}
                 <motion.div
                     variants={scaleIn}
-                    className="order-100 lg:order-3 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+                    className="order-6 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     <button
                     onClick={() => {
@@ -898,13 +898,33 @@ const ABCDMetronome = () => {
                 </motion.div>
             </div>
             
-            {/* COLONNA DI DESTRA (4/12 - Controlli, Tempo, Profilo) */}
+            {/* COLONNA DI DESTRA (4/12 - Tempo, Controlli, Profilo) */}
             <div className="flex flex-col gap-8 lg:w-4/12">
-                
-                {/* 3. CONTROLLI: order-2 (Mobile) / lg:order-1 (Desktop) - SCAMBIATO CON TEMPO COMPLESSIVO */}
+                {/* 2. TEMPO COMPLESSIVO: order-2 (Mobile) */}
                 <motion.div
                     variants={scaleIn}
-                    className="order-2 lg:order-1 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+                    className="order-2 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur"
+                >
+                    <div className="flex items-center justify-between">
+                    <div>
+                        <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
+                        <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                        {`Sezione ${currentPhase}: ${phaseDurations[currentPhase]} Min`}
+                    </div>
+                    </div>
+                    {audioError && (
+                    <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
+                        {audioError}
+                    </div>
+                    )}
+                </motion.div>
+                
+                {/* 3. CONTROLLI: order-3 (Mobile) */}
+                <motion.div
+                    variants={scaleIn}
+                    className="order-3 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     <div className="flex items-center justify-between">
                     <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Controlli</span>
@@ -962,32 +982,11 @@ const ABCDMetronome = () => {
                     <span className="w-10 text-right text-xs text-neutral-400">{Math.round(volume * 100)}%</span>
                     </div>
                 </motion.div>
-                
-                {/* 2. TEMPO COMPLESSIVO: order-3 (Mobile) / lg:order-2 (Desktop) - SCAMBIATO CON CONTROLLI */}
-                <motion.div
-                    variants={scaleIn}
-                    className="order-3 lg:order-2 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur"
-                >
-                    <div className="flex items-center justify-between">
-                    <div>
-                        <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
-                        <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                        {`Sezione ${currentPhase}: ${phaseDurations[currentPhase]} Min`}
-                    </div>
-                    </div>
-                    {audioError && (
-                    <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
-                        {audioError}
-                    </div>
-                    )}
-                </motion.div>
 
-                {/* 4. PROFILO FASI: order-4 (Mobile) / lg:order-3 (Desktop) */}
+                {/* 4. PROFILO FASI: order-4 (Mobile) */}
                 <motion.div
                     variants={scaleIn}
-                    className="order-4 lg:order-3 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+                    className="order-4 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     <div className="flex items-center justify-between">
                     <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Profilo fasi</span>
