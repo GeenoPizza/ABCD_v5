@@ -1,5 +1,6 @@
 import { easeInOut } from "framer-motion";
 import { useState, useEffect, useRef, useMemo } from "react";
+// L'errore è risolto qui, 'Play' è ora utilizzato:
 import { Play, Pause, SkipForward, RotateCcw, ChevronDown, ChevronUp, Plus, Minus, Volume2, Info, RefreshCcw } from 'lucide-react'; 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -615,6 +616,12 @@ const ABCDMetronome = () => {
     }).join(', ');
   }, [phaseDurations, totalDuration]);
 
+  // Nuova funzione per creare il glow multi-colore
+  const getGlobalResetGlow = () => {
+    const colors = phaseOrder.map(key => hexToRgba(phaseStyles[key].accent, 0.45));
+    return `0 0 10px ${colors[0]}, 0 0 10px ${colors[1]}, 0 0 10px ${colors[2]}, 0 0 10px ${colors[3]}`;
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#0b0d0e] text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
@@ -797,23 +804,34 @@ const ABCDMetronome = () => {
                     </div>
                     <div className="flex items-center gap-4"> 
                     
-                    {/* Pulsante Reset Globale */}
+                    {/* Pulsante Reset Globale - NUOVO GLOW ABCD */}
                     <button
                         onClick={handleReset}
                         className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
                         title="Reset (ricomincia da A)"
-                        style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.25)}` }}
+                        style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.0)}`, transition: 'box-shadow 0.3s ease-in-out' }} 
+                        // Il glow ABCD è applicato al hover o se disattivato
+                        onMouseOver={(e) => {
+                            if (!isRunning || isPaused) {
+                                e.currentTarget.style.boxShadow = getGlobalResetGlow();
+                            }
+                        }}
+                        onMouseOut={(e) => {
+                            e.currentTarget.style.boxShadow = `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.0)}`;
+                        }}
                     >
                         <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
                         <RotateCcw size={22} className="relative" />
                     </button>
 
-                    {/* Pulsante Reset Fase Corrente - CORRETTO */}
+                    {/* Pulsante Reset Fase Corrente - GLOW COLORE CORRENTE */}
                     <button
                         onClick={handleRestartPhase}
                         disabled={!isRunning || isInBreak}
                         className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         title={`Ripeti la sezione ${currentPhase}`}
+                        // Applicazione condizionale del glow
+                        style={{ boxShadow: isRunning && !isInBreak ? `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.45)}` : 'none', transition: 'box-shadow 0.3s ease-in-out' }}
                     >
                         <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
                         <RefreshCcw size={22} className="relative" />
