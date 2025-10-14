@@ -1,6 +1,5 @@
 import { easeInOut } from "framer-motion";
 import { useState, useEffect, useRef, useMemo } from "react";
-// L'errore è risolto qui, 'Play' è ora utilizzato:
 import { Play, Pause, SkipForward, RotateCcw, ChevronDown, ChevronUp, Plus, Minus, Volume2, Info, RefreshCcw } from 'lucide-react'; 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -107,6 +106,15 @@ const ABCDMetronome = () => {
   const intervalIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const globalIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  
+  // RIFERIMENTO PER LA FASE SUCCESSIVA AL BREAK (FIX LOGICA)
+  const nextPhaseOnBreakEndRef = useRef<PhaseKey>('A'); 
+  
+  // ** STATO E REF PER FISSARE LE DIMENSIONI **
+  const metronomeContentRef = useRef<HTMLDivElement>(null);
+  const [contentDimensions, setContentDimensions] = useState<{ width: string, height: string } | null>(null);
+  // ** FINE STATO **
+
 
   const subdivisions = {
     quarter: { name: '♩ 1/4', beats: 1 },
@@ -118,7 +126,10 @@ const ABCDMetronome = () => {
   const getPhasePercentage = (phase: PhaseKey) => phasePercentages[phase] / 100;
 
   const getCurrentBPM = () => {
-    return Math.round(targetBPM * getPhasePercentage(currentPhase));
+    // FIX: Durante il break, il BPM del metronomo dovrebbe basarsi sulla fase successiva.
+    // Usiamo nextPhaseOnBreakEndRef.current se siamo in break, altrimenti currentPhase.
+    const phase = isInBreak ? nextPhaseOnBreakEndRef.current : currentPhase;
+    return Math.round(targetBPM * getPhasePercentage(phase));
   };
   
   const ensureAudioContext = () => {
@@ -250,12 +261,14 @@ const ABCDMetronome = () => {
     if (!audioContextRef.current) { return; }
     const lookahead = 0.1;
     const scheduleAheadTime = 0.2;
+    // FIX: Chiamiamo getCurrentBPM() qui, che si basa su nextPhaseOnBreakEndRef.current se in break.
+    const currentBPM = getCurrentBPM();
+    const secondsPerNote = 60.0 / (currentBPM * subdivisions[subdivision].beats);
+    
     while (audioContextRef.current && nextNoteTimeRef.current < audioContextRef.current.currentTime + scheduleAheadTime) {
-      const currentBPM = getCurrentBPM();
       const beatsPerBar = subdivisions[subdivision].beats;
       const isAccent = currentNoteRef.current % beatsPerBar === 0;
       scheduleNote(nextNoteTimeRef.current, isAccent);
-      const secondsPerNote = 60.0 / (currentBPM * subdivisions[subdivision].beats); 
       nextNoteTimeRef.current += secondsPerNote;
       currentNoteRef.current++;
     }
@@ -289,36 +302,45 @@ const ABCDMetronome = () => {
     return total;
   };
 
-  const startBreak = (nextPhase: PhaseKey) => {
-    setIsInBreak(true);
-    setCountdownBeat(0);
-    
-    setTotalTimeRemaining(calculateRemainingTime(nextPhase));
-
+  // FIX: startBreak accetta la *prossima* fase che deve partire DOPO il break.
+  const startBreak = (phaseToStartAfterBreak: PhaseKey) => {
+    // 1. Pulizia e setup del break
     countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
     countdownTimeoutsRef.current = [];
 
-    const nextBPM = Math.round(targetBPM * getPhasePercentage(nextPhase));
+    // Imposta il riferimento per la fase successiva
+    nextPhaseOnBreakEndRef.current = phaseToStartAfterBreak;
+
+    setIsInBreak(true);
+    setIsPaused(false); 
+    setCountdownBeat(0);
+    
+    // Aggiorna il tempo totale rimanente
+    setTotalTimeRemaining(calculateRemainingTime(phaseToStartAfterBreak));
+
+    // Il metronomo (e il countdown) usano il BPM della fase successiva
+    const nextBPM = Math.round(targetBPM * getPhasePercentage(phaseToStartAfterBreak));
     const halfNoteDuration = (60 / nextBPM) * 2 * 1000;
     const quarterNoteDuration = (60 / nextBPM) * 1000;
     
-    // Countdown sounds
-    // 1st measure (2 half beats)
+    // 2. Scheduler del Countdown (4 beats totali - 2 lenti, 4 veloci)
     const t1 = setTimeout(() => { playCountSound(1, halfNoteDuration); setCountdownBeat(1); }, 0);
     const tick1 = setTimeout(() => { playTickSound(); }, quarterNoteDuration);
     const t2 = setTimeout(() => { playCountSound(2, halfNoteDuration); setCountdownBeat(2); }, halfNoteDuration);
     const tick2 = setTimeout(() => { playTickSound(); }, halfNoteDuration + quarterNoteDuration);
-    // 2nd measure (4 quick beats)
+    
     const t3 = setTimeout(() => { playCountSound(1, quarterNoteDuration); setCountdownBeat(3); }, halfNoteDuration * 2);
     const t4 = setTimeout(() => { playCountSound(2, quarterNoteDuration); setCountdownBeat(4); }, halfNoteDuration * 2 + quarterNoteDuration);
     const t5 = setTimeout(() => { playCountSound(3, quarterNoteDuration); setCountdownBeat(5); }, halfNoteDuration * 2 + quarterNoteDuration * 2);
     const t6 = setTimeout(() => { playCountSound(4, quarterNoteDuration); setCountdownBeat(6); }, halfNoteDuration * 2 + quarterNoteDuration * 3);
 
+    // 3. Fine del break e passaggio alla fase.
     const t7 = setTimeout(() => {
       setIsInBreak(false);
       setCountdownBeat(0);
-      setCurrentPhase(nextPhase);
-      setTimeRemaining(phaseDurations[nextPhase] * 60);
+      setCurrentPhase(phaseToStartAfterBreak); // Usa la fase impostata nel ref/parametro
+      setTimeRemaining(phaseDurations[phaseToStartAfterBreak] * 60);
+      // Il metronomo ripartirà automaticamente grazie all'useEffect.
     }, halfNoteDuration * 2 + quarterNoteDuration * 4);
 
     countdownTimeoutsRef.current = [t1, tick1, t2, tick2, t3, t4, t5, t6, t7];
@@ -326,17 +348,21 @@ const ABCDMetronome = () => {
 
 
   const goToNextPhase = (manual = false) => {
-    const currentIndex = phaseOrder.indexOf(currentPhase);
+    // Se stiamo già in un break, annulliamo i timeout e partiamo con il break per la fase successiva
+    countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+    countdownTimeoutsRef.current = [];
+    stopMetronome();
+    if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+
+    const phaseToTransitionFrom = isInBreak ? nextPhaseOnBreakEndRef.current : currentPhase;
+    const currentIndex = phaseOrder.indexOf(phaseToTransitionFrom);
 
     if (currentIndex < phaseOrder.length - 1) {
-      stopMetronome();
-      if (intervalIdRef.current) {
-        clearInterval(intervalIdRef.current);
-        intervalIdRef.current = null;
-      }
-      
-      startBreak(phaseOrder[currentIndex + 1]);
+      // Prossima fase nella sequenza
+      const nextPhase = phaseOrder[currentIndex + 1];
+      startBreak(nextPhase);
     } else if (manual) {
+      // Ultima fase, saltata, si comporta come un reset
       setTotalTimeRemaining(0);
       setIsRunning(false);
       setCurrentPhase('A');
@@ -345,7 +371,38 @@ const ABCDMetronome = () => {
   };
 
 
+  // FUNZIONE RIPETI FASE CORRENTE (FIX LOGICA)
+  const handleRestartPhase = () => {
+    if (!isRunning || isInBreak) return;
+
+    // 1. Ferma i metronomi/timer correnti
+    stopMetronome();
+    if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+    if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+    
+    // 2. Calcola il tempo trascorso nella fase attuale (da sottrarre al totale)
+    const phaseDurationSeconds = phaseDurations[currentPhase] * 60;
+    const timeElapsedInPhase = phaseDurationSeconds - timeRemaining;
+    
+    // 3. Resetta il tempo totale globale (aggiungendo il tempo 'perso' indietro)
+    // Questo mantiene il conteggio globale corretto per la barra di progressione.
+    setTotalTimeRemaining(prevTotal => prevTotal + timeElapsedInPhase);
+
+    // 4. Riavvia la fase corrente tramite il break
+    // Il break farà il countdown e imposterà 'currentPhase' come fase successiva
+    startBreak(currentPhase);
+  };
+  // FINE FUNZIONE RIPETI FASE
+
+
   useEffect(() => {
+    let shouldRestartBreak = false;
+    
+    // Logica per riprendere un break in pausa
+    if (isRunning && !isPaused && isInBreak && countdownTimeoutsRef.current.length === 0) {
+        shouldRestartBreak = true;
+    }
+    
     if (isRunning && !isPaused && !isInBreak) {
       if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); }
       globalIntervalRef.current = setInterval(() => {
@@ -364,14 +421,17 @@ const ABCDMetronome = () => {
             const currentIndex = phaseOrder.indexOf(currentPhase);
 
             if (currentIndex < phaseOrder.length - 1) {
-              startBreak(phaseOrder[currentIndex + 1]);
+              const nextPhase = phaseOrder[currentIndex + 1];
+              startBreak(nextPhase); // Passa la fase successiva
             } else {
+              // Fine del ciclo
               setIsRunning(false);
               setCurrentPhase('A');
               setTimeRemaining(phaseDurations['A'] * 60);
               setTotalTimeRemaining(0);
             }
-            return phaseDurations[currentPhase] * 60;
+            // Non resettare il tempo qui, verrà resettato in startBreak per la fase successiva
+            return 0; // Il timer si fermerà, il prossimo valore verrà impostato da startBreak
           }
           return prev - 1;
         });
@@ -380,13 +440,35 @@ const ABCDMetronome = () => {
       stopMetronome();
       if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
       if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+      
+      // Quando in pausa, interrompi tutti i timeout del countdown
+      countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+      countdownTimeoutsRef.current = [];
+    }
+    
+    // Se c'è un break in pausa che deve riprendere
+    if (shouldRestartBreak) {
+        const nextPhase = nextPhaseOnBreakEndRef.current; 
+        
+        if (nextPhase !== 'A' || currentPhase !== 'D') {
+            startBreak(nextPhase);
+        } else {
+            // Se D è finita e il break finale è stato messo in pausa, termina il ciclo
+            setIsRunning(false);
+            setCurrentPhase('A');
+            setTimeRemaining(phaseDurations['A'] * 60);
+            setTotalTimeRemaining(0);
+        }
     }
 
     return () => {
       stopMetronome();
       if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
       if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+      countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+      countdownTimeoutsRef.current = [];
     };
+    // Dipendenze aggiornate per includere il nuovo ref
   }, [isRunning, isPaused, isInBreak, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages]); 
 
   useEffect(() => {
@@ -408,6 +490,25 @@ const ABCDMetronome = () => {
     }
   }, [volume]);
   
+  // ** EFFECT PER CATTURARE LE DIMENSIONI (mantenuto il fix) **
+  useEffect(() => {
+    if (!isInBreak && metronomeContentRef.current) {
+        const { offsetWidth, offsetHeight } = metronomeContentRef.current;
+        setContentDimensions({
+            width: offsetWidth + 'px',
+            height: offsetHeight + 'px',
+        });
+    } else if (!isRunning && !contentDimensions) {
+        if (metronomeContentRef.current) {
+            setContentDimensions({
+                width: metronomeContentRef.current.offsetWidth + 'px',
+                height: metronomeContentRef.current.offsetHeight + 'px',
+            });
+        }
+    }
+  }, [isInBreak, currentPhase]);
+  // ** FINE EFFECT **
+
   const handleStartStop = () => {
     if (isRunning) {
       setIsPaused(!isPaused);
@@ -417,26 +518,25 @@ const ABCDMetronome = () => {
       setTotalTimeRemaining(calculateTotalTime(phaseDurations));
       setIsRunning(true);
       setIsPaused(false);
-      startBreak('A');
+      // FIX: Al primo start, parte il break che farà iniziare la fase 'A'
+      startBreak('A'); 
+    }
+  };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === ' ') {
+      const activeElement = document.activeElement;
+      if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.getAttribute('contenteditable') === 'true')) {
+        return; 
+      }
+      
+      event.preventDefault();
+
+      handleStartStop();
     }
   };
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === ' ') {
-        const activeElement = document.activeElement;
-        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.getAttribute('contenteditable') === 'true')) {
-          return; 
-        }
-        
-        event.preventDefault();
-
-        if (!isInBreak) {
-          handleStartStop();
-        }
-      }
-    };
-
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
@@ -451,6 +551,7 @@ const ABCDMetronome = () => {
     setTimeRemaining(phaseDurations['A'] * 60);
     setTotalTimeRemaining(calculateTotalTime(phaseDurations));
     setIsInBreak(false);
+    nextPhaseOnBreakEndRef.current = 'A'; // Resetta anche il riferimento
     stopMetronome();
     countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
     countdownTimeoutsRef.current = [];
@@ -465,6 +566,7 @@ const ABCDMetronome = () => {
     setCurrentPhase('A');
     setTotalTimeRemaining(calculateTotalTime(defaultPhaseDurations));
     setTimeRemaining(defaultPhaseDurations['A'] * 60);
+    nextPhaseOnBreakEndRef.current = 'A';
   };
 
   const formatTime = (seconds: number) => {
@@ -498,6 +600,7 @@ const ABCDMetronome = () => {
   // Logica Barra di Progressione Globale
   const totalDuration = calculateTotalTime(phaseDurations);
   const totalElapsed = totalDuration - totalTimeRemaining;
+  // La progressione è calcolata in modo inverso per la barra di progressione.
   const currentProgressWidth = isRunning && totalDuration > 0 ? (totalElapsed / totalDuration) * 100 : 0;
   
   const gradientStops = useMemo(() => {
@@ -558,8 +661,9 @@ const ABCDMetronome = () => {
             initial="hidden"
             animate="visible"
         >
-            {/* COLONNA DI SINISTRA (8/12 - Metronomo, Settings, Info) */}
-            <div className="flex flex-col gap-8 lg:w-8/12">
+            {/* COLONNA DI SINISTRA (lg:w-7/12 - Metronomo, Controlli) */}
+            <div className="flex flex-col gap-8 lg:w-7/12"> 
+                
                 {/* 1. SEZIONE METRONOMO: order-1 (Mobile/Desktop) */}
                 <motion.section
                     variants={scaleIn}
@@ -567,37 +671,18 @@ const ABCDMetronome = () => {
                 >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_rgba(17,19,22,0.6))] opacity-90" />
                     <div className="relative z-10 space-y-12">
-                    <AnimatePresence mode="wait">
-                        {isInBreak ? (
+                        {/* Pills - VISIBILE SEMPRE */}
                         <motion.div
-                            key="break"
-                            initial={{ opacity: 0, y: 30 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.65, ease: 'easeOut' }}
-                            className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur"
-                        >
-                            <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">Preparazione</span>
-                            <div className="mt-6 text-[5.5rem] font-bold text-[#8ab7aa]">
-                            {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
-                            </div>
-                            <p className="text-neutral-400">
-                            {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
-                            </p>
-                        </motion.div>
-                        ) : (
-                        <motion.div key="active" className="space-y-12">
-                            <motion.div
                             variants={staggerParent}
                             initial="hidden"
                             animate="visible"
-                            className="grid grid-cols-2 gap-3 justify-items-center xl:grid-cols-4 xl:flex xl:flex-wrap xl:justify-start" 
-                            >
+                            className="grid grid-cols-2 gap-3 justify-items-center sm:grid-cols-4" 
+                        >
                             {phaseOrder.map(key => (
                                 <motion.div
                                 key={key}
                                 variants={pillVariant}
-                                className={`group flex items-center gap-0.5 rounded-full border border-white/5 px-3.5 py-1.5 text-sm transition ${
+                                className={`group flex items-center justify-center w-full gap-0.5 rounded-full border border-white/5 px-3.5 py-1.5 text-sm transition ${
                                     currentPhase === key
                                     ? `bg-gradient-to-r ${phaseStyles[key].color} text-white font-semibold shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
                                     : 'bg-white/5 text-neutral-300 hover:text-white'
@@ -611,69 +696,249 @@ const ABCDMetronome = () => {
                                 </span>
                                 </motion.div>
                             ))}
-                            </motion.div>
-
-                            <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
-                            <div className="relative mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
-                                <div
-                                className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
-                                style={{
-                                    borderColor: beatFlash ? phaseStyles[currentPhase].accent : 'rgba(255,255,255,0.12)',
-                                    boxShadow: beatFlash
-                                    ? `0 0 70px ${phaseStyles[currentPhase].accent}66, inset 0 0 35px ${phaseStyles[currentPhase].accent}33`
-                                    : 'inset 0 0 28px rgba(0,0,0,0.4)'
-                                }}
-                                />
-                                <div className="relative text-center">
-                                <div className="text-[4.85rem] font-semibold" style={{ color: phaseStyles[currentPhase].accent }}>{getCurrentBPM()}</div>
-                                <div className="text-sm uppercase tracking-[0.4em] text-neutral-400">BPM</div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-6 text-left">
-                                <div>
-                                <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">Sezione attuale</span>
-                                <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
-                                    {currentPhase} • {phaseStyles[currentPhase].name}
-                                </h2>
-                                <p className="mt-2 text-sm text-neutral-400">
-                                    {subdivisions[subdivision].name} • Target {targetBPM} BPM • Durata {phaseDurations[currentPhase]} min
-                                </p>
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
-                                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                                    Tempo totale • {formatTime(totalTimeRemaining)}
-                                </span>
-                                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                                    {phasePercentages[currentPhase]}% della velocità target
-                                </span>
-                                </div>
-
-                                <div>
-                                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                                    <span>Progressione sezione</span>
-                                    <span>{formatTime(timeRemaining)}</span>
-                                </div>
-                                <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-white/5">
-                                    <div
-                                    className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[currentPhase].color}`}
-                                    style={{ width: `${(timeRemaining / (phaseDurations[currentPhase] * 60)) * 100}%` }}
-                                    />
-                                </div>
-                                </div>
-                            </div>
-                            </div>
                         </motion.div>
-                        )}
-                    </AnimatePresence>
+
+                        {/* FIX: Wrapper Relative per stabilizzare le dimensioni */}
+                        <div className="relative" style={contentDimensions ?? {}}>
+                            <AnimatePresence mode="wait">
+                                {isInBreak ? (
+                                <motion.div
+                                    key="break"
+                                    initial={{ opacity: 0, y: 30 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -20 }}
+                                    transition={{ duration: 0.65, ease: 'easeOut' }}
+                                    // Utilizza absolute inset-0 per riempire lo spazio fissato dal genitore
+                                    className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur w-full flex flex-col justify-center absolute inset-0"
+                                >
+                                    <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">
+                                        {/* Il nome della fase successiva è in nextPhaseOnBreakEndRef */}
+                                        Preparazione per la sezione {nextPhaseOnBreakEndRef.current}
+                                    </span>
+                                    <div className="mt-6 text-[5.5rem] font-bold text-[#8ab7aa]">
+                                    {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
+                                    </div>
+                                    <p className="text-neutral-400">
+                                    {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
+                                    </p>
+                                </motion.div>
+                                ) : (
+                                <motion.div 
+                                    key="active" 
+                                    className="w-full" 
+                                    ref={metronomeContentRef} // Aggiunge il ref per la misurazione
+                                > 
+                                    <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
+                                    <div className="relative mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
+                                        <div
+                                        className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
+                                        style={{
+                                            borderColor: beatFlash ? phaseStyles[currentPhase].accent : 'rgba(255,255,255,0.12)',
+                                            boxShadow: beatFlash
+                                            ? `0 0 70px ${phaseStyles[currentPhase].accent}66, inset 0 0 35px ${phaseStyles[currentPhase].accent}33`
+                                            : 'inset 0 0 28px rgba(0,0,0,0.4)'
+                                        }}
+                                        />
+                                        <div className="relative text-center">
+                                        <div className="text-[4.85rem] font-semibold" style={{ color: phaseStyles[currentPhase].accent }}>{getCurrentBPM()}</div>
+                                        <div className="text-sm uppercase tracking-[0.4em] text-neutral-400">BPM</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-6 text-left">
+                                        <div>
+                                        <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">Sezione attuale</span>
+                                        <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
+                                            {currentPhase} • {phaseStyles[currentPhase].name}
+                                        </h2>
+                                        <p className="mt-2 text-sm text-neutral-400">
+                                            {subdivisions[subdivision].name} • Target {targetBPM} BPM • Durata {phaseDurations[currentPhase]} min
+                                        </p>
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
+                                        <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                                            Tempo totale • {formatTime(totalTimeRemaining)}
+                                        </span>
+                                        <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
+                                            {phasePercentages[currentPhase]}% della velocità target
+                                        </span>
+                                        </div>
+
+                                        <div>
+                                        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                                            <span>Progressione sezione</span>
+                                            <span>{formatTime(timeRemaining)}</span>
+                                        </div>
+                                        <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-white/5">
+                                            <div
+                                            className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[currentPhase].color}`}
+                                            style={{ width: `${(timeRemaining / (phaseDurations[currentPhase] * 60)) * 100}%` }}
+                                            />
+                                        </div>
+                                        </div>
+                                    </div>
+                                    </div>
+                                </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
                     </div>
                 </motion.section>
                 
-                {/* 5. SETTINGS: order-99 (Mobile) / lg:order-2 (Desktop) */}
+                {/* 3. CONTROLLI: order-2 (Mobile) / lg:order-2 (Desktop) */}
                 <motion.div
                     variants={scaleIn}
-                    className="order-99 lg:order-2 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+                    className="order-2 lg:order-2 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+                >
+                    <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Controlli</span>
+                    <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">live</span>
+                    </div>
+                    <div className="flex items-center gap-4"> 
+                    
+                    {/* Pulsante Reset Globale */}
+                    <button
+                        onClick={handleReset}
+                        className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
+                        title="Reset (ricomincia da A)"
+                        style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.25)}` }}
+                    >
+                        <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
+                        <RotateCcw size={22} className="relative" />
+                    </button>
+
+                    {/* Pulsante Reset Fase Corrente - CORRETTO */}
+                    <button
+                        onClick={handleRestartPhase}
+                        disabled={!isRunning || isInBreak}
+                        className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        title={`Ripeti la sezione ${currentPhase}`}
+                    >
+                        <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
+                        <RefreshCcw size={22} className="relative" />
+                    </button>
+
+                    {/* Pulsante Play/Pausa */}
+                    <button
+                        onClick={handleStartStop}
+                        className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
+                        isRunning && !isPaused
+                            ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
+                            : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
+                        }`}
+                    >
+                        {/* LOGICA ICONA CORRETTA */}
+                        {isRunning && !isPaused 
+                            ? <Pause size={24} className="relative" /> 
+                            : <Play size={24} className="relative" />}
+                        {/* LOGICA TESTO */}
+                        <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
+                    </button>
+
+                    {/* Pulsante Skip Forward */}
+                    <button
+                        onClick={() => goToNextPhase(true)}
+                        disabled={!isRunning || isInBreak || currentPhase === 'D'}
+                        className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        title="Sezione successiva"
+                    >
+                        <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
+                        <SkipForward size={22} className="relative" />
+                    </button>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
+                    <Volume2 size={16} className="text-neutral-400" />
+                    <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={volume}
+                        onChange={(e) => setVolume(Number(e.target.value))}
+                        className="flex-1 accent-[#3e5c55] [--tw-ring-color:transparent]"
+                    />
+                    <span className="w-10 text-right text-xs text-neutral-400">{Math.round(volume * 100)}%</span>
+                    </div>
+                </motion.div>
+                
+            </div>
+            
+            {/* COLONNA DI DESTRA (lg:w-5/12 - Tempo, Overview, Settings, Info) */}
+            <div className="flex flex-col gap-8 lg:w-5/12"> 
+                
+                {/* 2. TEMPO COMPLESSIVO: order-3 (Mobile) / lg:order-1 (Desktop) */}
+                <motion.div
+                    variants={scaleIn}
+                    className="order-3 lg:order-1 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur"
+                >
+                    <div className="flex items-center justify-between">
+                    <div>
+                        <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
+                        <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
+                    </div>
+                    {/* Formattazione del tempo su due righe */}
+                    <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-center">
+                        <span style={{ color: phaseStyles[currentPhase].accent, fontWeight: 'bold' }}>
+                            {`Sezione ${currentPhase}:`}
+                        </span>
+                        <div className="text-neutral-400 mt-0.5 font-normal tracking-normal text-sm">
+                            {`${phaseDurations[currentPhase]} minuti`}
+                        </div>
+                    </div>
+                    </div>
+                    {audioError && (
+                    <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
+                        {audioError}
+                    </div>
+                    )}
+                </motion.div>
+
+                {/* 4. PROFILO FASI -> OVERVIEW SEZIONI: order-4 (Mobile) / lg:order-2 (Desktop) */}
+                <motion.div
+                    variants={scaleIn}
+                    className="order-4 lg:order-2 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+                >
+                    <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Overview Sezioni</span> 
+                    <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">overview</span>
+                    </div>
+                    <div className="space-y-5">
+                    {phaseOrder.map(key => (
+                        <div key={key} className="space-y-2">
+                        <div className="flex items-center justify-between text-sm font-semibold text-neutral-200">
+                            <span>{key} • {phaseStyles[key].name}</span>
+                            <span className="text-neutral-400">{Math.round(targetBPM * getPhasePercentage(key))} BPM</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                            <span>{phaseDurations[key]} min</span>
+                            <span>{phasePercentages[key]}%</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5 relative">
+                            <div
+                            className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[key].color}`}
+                            style={{ width: `${Math.min(phasePercentages[key], 100) / 150 * 100}%` }}
+                            />
+                            {phasePercentages[key] > 100 && (
+                            <div
+                                className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-orange-500 to-red-600"
+                                style={{ 
+                                width: `${((phasePercentages[key] - 100) / 150) * 100}%`,
+                                marginLeft: `${(100 / 150) * 100}%`
+                                }}
+                            />
+                            )}
+                        </div>
+                        </div>
+                    ))}
+                    </div>
+                </motion.div>
+                
+                {/* 5. SETTINGS: order-5 (Mobile) / lg:order-3 (Desktop) */}
+                <motion.div
+                    variants={scaleIn}
+                    className="order-5 lg:order-3 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     {/* Pulsante a tutta larghezza */}
                     <button
@@ -832,10 +1097,10 @@ const ABCDMetronome = () => {
                     </AnimatePresence>
                 </motion.div>
 
-                {/* 6. INFO & ISTRUZIONI: order-100 (Mobile) / lg:order-3 (Desktop) */}
+                {/* 6. INFO & ISTRUZIONI: order-6 (Mobile) / lg:order-4 (Desktop) */}
                 <motion.div
                     variants={scaleIn}
-                    className="order-100 lg:order-3 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
+                    className="order-6 lg:order-4 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     <button
                     onClick={() => {
@@ -897,133 +1162,6 @@ const ABCDMetronome = () => {
                     </AnimatePresence>
                 </motion.div>
             </div>
-            
-            {/* COLONNA DI DESTRA (4/12 - Controlli, Tempo, Profilo) */}
-            <div className="flex flex-col gap-8 lg:w-4/12">
-                
-                {/* 3. CONTROLLI: order-2 (Mobile) / lg:order-1 (Desktop) - SCAMBIATO CON TEMPO COMPLESSIVO */}
-                <motion.div
-                    variants={scaleIn}
-                    className="order-2 lg:order-1 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
-                >
-                    <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Controlli</span>
-                    <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">live</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4">
-                    <button
-                        onClick={handleReset}
-                        className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
-                        title="Reset"
-                        style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.25)}` }}
-                    >
-                        <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
-                        <RotateCcw size={22} className="relative" />
-                    </button>
-
-                    <button
-                        onClick={handleStartStop}
-                        className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
-                        isRunning && !isPaused
-                            ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
-                            : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
-                        }`}
-                    >
-                        {/* LOGICA ICONA CORRETTA: Mostra Pause se in esecuzione, Play altrimenti (fermato o in pausa) */}
-                        {isRunning && !isPaused 
-                            ? <Pause size={24} className="relative" /> 
-                            : <Play size={24} className="relative" />}
-                        {/* LOGICA TESTO */}
-                        <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
-                    </button>
-
-                    <button
-                        onClick={() => goToNextPhase(true)}
-                        disabled={!isRunning || isInBreak || currentPhase === 'D'}
-                        className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        title="Sezione successiva"
-                    >
-                        <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
-                        <SkipForward size={22} className="relative" />
-                    </button>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
-                    <Volume2 size={16} className="text-neutral-400" />
-                    <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={volume}
-                        onChange={(e) => setVolume(Number(e.target.value))}
-                        className="flex-1 accent-[#3e5c55] [--tw-ring-color:transparent]"
-                    />
-                    <span className="w-10 text-right text-xs text-neutral-400">{Math.round(volume * 100)}%</span>
-                    </div>
-                </motion.div>
-                
-                {/* 2. TEMPO COMPLESSIVO: order-3 (Mobile) / lg:order-2 (Desktop) - SCAMBIATO CON CONTROLLI */}
-                <motion.div
-                    variants={scaleIn}
-                    className="order-3 lg:order-2 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur"
-                >
-                    <div className="flex items-center justify-between">
-                    <div>
-                        <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
-                        <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                        {`Sezione ${currentPhase}: ${phaseDurations[currentPhase]} Min`}
-                    </div>
-                    </div>
-                    {audioError && (
-                    <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
-                        {audioError}
-                    </div>
-                    )}
-                </motion.div>
-
-                {/* 4. PROFILO FASI: order-4 (Mobile) / lg:order-3 (Desktop) */}
-                <motion.div
-                    variants={scaleIn}
-                    className="order-4 lg:order-3 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
-                >
-                    <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Profilo fasi</span>
-                    <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">overview</span>
-                    </div>
-                    <div className="space-y-5">
-                    {phaseOrder.map(key => (
-                        <div key={key} className="space-y-2">
-                        <div className="flex items-center justify-between text-sm font-semibold text-neutral-200">
-                            <span>{key} • {phaseStyles[key].name}</span>
-                            <span className="text-neutral-400">{Math.round(targetBPM * getPhasePercentage(key))} BPM</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                            <span>{phaseDurations[key]} min</span>
-                            <span>{phasePercentages[key]}%</span>
-                        </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5 relative">
-                            <div
-                            className={`h-full rounded-full bg-gradient-to-r ${phaseStyles[key].color}`}
-                            style={{ width: `${Math.min(phasePercentages[key], 100) / 150 * 100}%` }}
-                            />
-                            {phasePercentages[key] > 100 && (
-                            <div
-                                className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-orange-500 to-red-600"
-                                style={{ 
-                                width: `${((phasePercentages[key] - 100) / 150) * 100}%`,
-                                marginLeft: `${(100 / 150) * 100}%`
-                                }}
-                            />
-                            )}
-                        </div>
-                        </div>
-                    ))}
-                    </div>
-                </motion.div>
-            </div>
         </motion.div>
 
         <motion.footer
@@ -1033,7 +1171,7 @@ const ABCDMetronome = () => {
           className="mt-16 flex flex-col gap-2 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-600 lg:flex-row lg:items-center lg:justify-between"
         >
           <span>Copyright © Batterista Online - Tutti i diritti riservati - www.batterista.online</span>
-          <span className="text-neutral-500">ABCD method versione 1.6</span>
+          <span className="text-neutral-500">ABCD method versione 1.7</span>
         </motion.footer>
       </div>
     </div>
