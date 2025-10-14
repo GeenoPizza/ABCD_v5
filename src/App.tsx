@@ -1,7 +1,7 @@
 import { easeInOut } from "framer-motion";
 import { useState, useEffect, useRef, useMemo } from "react";
-// L'errore è risolto qui, 'Play' è ora utilizzato:
-import { Play, Pause, SkipForward, RotateCcw, ChevronDown, ChevronUp, Plus, Minus, Volume2, Info, RefreshCcw } from 'lucide-react'; 
+// AGGIUNTA DI 'Target' per il pulsante Focus
+import { Play, Pause, SkipForward, RotateCcw, ChevronDown, ChevronUp, Plus, Minus, Volume2, Info, RefreshCcw, Target } from 'lucide-react'; 
 import { motion, AnimatePresence } from 'framer-motion';
 
 type PhaseKey = 'A' | 'B' | 'C' | 'D';
@@ -88,6 +88,7 @@ const ABCDMetronome = () => {
   const [phasePercentages, setPhasePercentages] = useState<PhasePercentages>(() => ({ ...defaultPhasePercentages }));
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isFocused, setIsFocused] = useState(false); // AGGIUNTO: Stato per il Focus/Freeze
   const [currentPhase, setCurrentPhase] = useState<PhaseKey>('A');
   const [timeRemaining, setTimeRemaining] = useState(defaultPhaseDurations.A * 60);
   const [totalTimeRemaining, setTotalTimeRemaining] = useState(calculateTotalTime(defaultPhaseDurations));
@@ -198,7 +199,7 @@ const ABCDMetronome = () => {
     const gainNode = ctx.createGain();
 
     osc.connect(gainNode);
-    gainNode.connect(masterGainRef.current);
+    gainNode.connect(masterGainRef.current!);
 
     osc.frequency.value = frequencies[count] || 880;
     osc.type = 'sine';
@@ -210,6 +211,41 @@ const ABCDMetronome = () => {
     osc.start(now);
     osc.stop(now + Math.min(duration / 1000, 0.3));
   };
+  
+  // AGGIUNTO: Funzione per il suono di avviso dei 10 secondi
+  const playWarningSound = () => {
+    if (!ensureAudioContext()) return;
+    resumeAudioContext();
+
+    const ctx = audioContextRef.current;
+    if (!ctx || !masterGainRef.current) return;
+
+    const now = ctx.currentTime;
+    const frequencies = [660, 784, 988]; // Mi, Sol, Si
+    const duration = 0.1;
+    const delay = 0.15; // Ritardo tra i beep
+
+    frequencies.forEach((freq, index) => {
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+
+        osc.connect(gainNode);
+        gainNode.connect(masterGainRef.current!);
+
+        osc.frequency.value = freq;
+
+        const startTime = now + index * delay;
+        const endTime = startTime + duration;
+
+        // Envelope veloce
+        gainNode.gain.setValueAtTime(0.0, startTime);
+        gainNode.gain.linearRampToValueAtTime(1.0, startTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+        osc.start(startTime);
+        osc.stop(endTime);
+    });
+  };
 
   const playTickSound = () => { 
     if (!ensureAudioContext()) {
@@ -227,7 +263,7 @@ const ABCDMetronome = () => {
     const gainNode = ctx.createGain();
 
     osc.connect(gainNode);
-    gainNode.connect(masterGainRef.current);
+    gainNode.connect(masterGainRef.current!);
 
     osc.frequency.value = 700;
     osc.type = 'triangle';
@@ -246,7 +282,7 @@ const ABCDMetronome = () => {
     const osc = ctx.createOscillator();
     const gainNode = ctx.createGain();
     osc.connect(gainNode);
-    gainNode.connect(masterGainRef.current);
+    gainNode.connect(masterGainRef.current!);
     osc.frequency.value = isAccent ? 1200 : 800;
     gainNode.gain.value = isAccent ? 0.3 : 0.15;
     osc.start(time);
@@ -308,7 +344,8 @@ const ABCDMetronome = () => {
     // 1. Pulizia e setup del break
     countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
     countdownTimeoutsRef.current = [];
-
+    setIsFocused(false); // FORZA L'USCITA dal Focus quando inizia il Break
+    
     // Imposta il riferimento per la fase successiva
     nextPhaseOnBreakEndRef.current = phaseToStartAfterBreak;
 
@@ -354,6 +391,9 @@ const ABCDMetronome = () => {
     countdownTimeoutsRef.current = [];
     stopMetronome();
     if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+    
+    // Quando si salta una fase, si esce anche dal focus
+    setIsFocused(false);
 
     const phaseToTransitionFrom = isInBreak ? nextPhaseOnBreakEndRef.current : currentPhase;
     const currentIndex = phaseOrder.indexOf(phaseToTransitionFrom);
@@ -374,7 +414,7 @@ const ABCDMetronome = () => {
 
   // FUNZIONE RIPETI FASE CORRENTE (FIX LOGICA)
   const handleRestartPhase = () => {
-    if (!isRunning || isInBreak) return;
+    if (!isRunning || isInBreak || isFocused) return; // AGGIUNTO: Non riavviare se in focus
 
     // 1. Ferma i metronomi/timer correnti
     stopMetronome();
@@ -395,7 +435,15 @@ const ABCDMetronome = () => {
   };
   // FINE FUNZIONE RIPETI FASE
 
+  // AGGIUNTO: Funzione per il Focus/Freeze
+  const handleFocusToggle = () => {
+    if (!isRunning || isPaused || isInBreak) return;
+    setIsFocused(prev => !prev);
+  };
+  // FINE FUNZIONE FOCUS/FREEZE
 
+
+  // INIZIO: LOGICA AGGIORNATA DEI TIMER E METRONOMO
   useEffect(() => {
     let shouldRestartBreak = false;
     
@@ -404,17 +452,34 @@ const ABCDMetronome = () => {
         shouldRestartBreak = true;
     }
     
+    // 1. --- Metronome Control ---
+    // Il metronomo gira se running, non in pausa, e non in break (anche se isFocused)
     if (isRunning && !isPaused && !isInBreak) {
+      startMetronome();
+    } else {
+      stopMetronome();
+    }
+
+    // 2. --- Phase and Global Timer Control (SI FERMA se focused) ---
+    if (isRunning && !isPaused && !isInBreak && !isFocused) {
+      
+      // Avvia Timer Globale (tempo totale rimanente)
       if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); }
       globalIntervalRef.current = setInterval(() => {
         setTotalTimeRemaining(prev => (prev > 0 ? prev - 1 : 0));
       }, 1000);
 
-      startMetronome(); 
-      
+      // Avvia Timer di Fase (tempo rimanente nella fase corrente)
       if (intervalIdRef.current) { clearInterval(intervalIdRef.current); }
       intervalIdRef.current = setInterval(() => {
         setTimeRemaining(prev => {
+          
+          // --- LOGICA AVVISO 10 SECONDI (SOUND) ---
+          if (prev === 11) {
+             playWarningSound();
+          }
+          // --- FINE LOGICA AVVISO ---
+
           if (prev <= 1) {
             stopMetronome();
             if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
@@ -431,14 +496,13 @@ const ABCDMetronome = () => {
               setTimeRemaining(phaseDurations['A'] * 60);
               setTotalTimeRemaining(0);
             }
-            // Non resettare il tempo qui, verrà resettato in startBreak per la fase successiva
-            return 0; // Il timer si fermerà, il prossimo valore verrà impostato da startBreak
+            return 0; 
           }
           return prev - 1;
         });
       }, 1000);
     } else {
-      stopMetronome();
+      // Ferma Timer di Fase e Globale quando pausato, in break, o FOCUSED
       if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
       if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
       
@@ -469,8 +533,10 @@ const ABCDMetronome = () => {
       countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
       countdownTimeoutsRef.current = [];
     };
-    // Dipendenze aggiornate per includere il nuovo ref
-  }, [isRunning, isPaused, isInBreak, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages]); 
+    // AGGIUNTO: isFocused come dependency
+  }, [isRunning, isPaused, isInBreak, isFocused, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages]); 
+  // FINE: LOGICA AGGIORNATA DEI TIMER E METRONOMO
+
 
   useEffect(() => {
     return () => {
@@ -513,12 +579,14 @@ const ABCDMetronome = () => {
   const handleStartStop = () => {
     if (isRunning) {
       setIsPaused(!isPaused);
+      setIsFocused(false); // FORZA L'USCITA dal Focus se si pausa
     } else {
       ensureAudioContext();
       resumeAudioContext();
       setTotalTimeRemaining(calculateTotalTime(phaseDurations));
       setIsRunning(true);
       setIsPaused(false);
+      setIsFocused(false); // Resetta Focus
       // FIX: Al primo start, parte il break che farà iniziare la fase 'A'
       startBreak('A'); 
     }
@@ -548,6 +616,7 @@ const ABCDMetronome = () => {
   const handleReset = () => {
     setIsRunning(false);
     setIsPaused(false);
+    setIsFocused(false); // Resetta Focus
     setCurrentPhase('A');
     setTimeRemaining(phaseDurations['A'] * 60);
     setTotalTimeRemaining(calculateTotalTime(phaseDurations));
@@ -575,6 +644,9 @@ const ABCDMetronome = () => {
     const secs = Math.max(seconds % 60, 0);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+  
+  // Flag per la logica di avviso visivo
+  const isTimeWarning = !isInBreak && isRunning && timeRemaining <= 10 && !isFocused;
 
   const adjustBPM = (delta: number) => {
     setTargetBPM(prev => Math.max(40, Math.min(240, prev + delta)));
@@ -771,11 +843,23 @@ const ABCDMetronome = () => {
                                             {phasePercentages[currentPhase]}% della velocità target
                                         </span>
                                         </div>
+                                        
+                                        {/* AGGIUNTO: Indicatore Focus Attivo */}
+                                        {isFocused && (
+                                            <div className="inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.35em] text-yellow-300">
+                                                <Target size={14} /> FOCUS ATTIVO • TIMER FREEZE
+                                            </div>
+                                        )}
 
                                         <div>
                                         <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
                                             <span>Progressione sezione</span>
-                                            <span>{formatTime(timeRemaining)}</span>
+                                            {/* AGGIUNTO: Logica avviso visivo 10 secondi */}
+                                            <span 
+                                                className={isTimeWarning ? 'text-red-400 font-bold' : 'text-neutral-500'}
+                                            >
+                                                {formatTime(timeRemaining)}
+                                            </span>
                                         </div>
                                         <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-white/5">
                                             <div
@@ -812,7 +896,7 @@ const ABCDMetronome = () => {
                         style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.0)}`, transition: 'box-shadow 0.3s ease-in-out' }} 
                         // Il glow ABCD è applicato al hover o se disattivato
                         onMouseOver={(e) => {
-                            if (!isRunning || isPaused) {
+                            if (!isRunning || isPaused || isFocused) { // AGGIUNTO: Controlla anche isFocused
                                 e.currentTarget.style.boxShadow = getGlobalResetGlow();
                             }
                         }}
@@ -827,11 +911,11 @@ const ABCDMetronome = () => {
                     {/* Pulsante Reset Fase Corrente - GLOW COLORE CORRENTE */}
                     <button
                         onClick={handleRestartPhase}
-                        disabled={!isRunning || isInBreak}
+                        disabled={!isRunning || isInBreak || isFocused} // AGGIUNTO: Disabilita se in Focus
                         className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         title={`Ripeti la sezione ${currentPhase}`}
                         // Applicazione condizionale del glow
-                        style={{ boxShadow: isRunning && !isInBreak ? `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.45)}` : 'none', transition: 'box-shadow 0.3s ease-in-out' }}
+                        style={{ boxShadow: isRunning && !isInBreak && !isFocused ? `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.45)}` : 'none', transition: 'box-shadow 0.3s ease-in-out' }}
                     >
                         <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
                         <RefreshCcw size={22} className="relative" />
@@ -840,6 +924,7 @@ const ABCDMetronome = () => {
                     {/* Pulsante Play/Pausa */}
                     <button
                         onClick={handleStartStop}
+                        disabled={isInBreak} // Non disabilitare per isFocused, Play/Pause ferma tutto
                         className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
                         isRunning && !isPaused
                             ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
@@ -853,11 +938,26 @@ const ABCDMetronome = () => {
                         {/* LOGICA TESTO */}
                         <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
                     </button>
+                    
+                    {/* AGGIUNTO: Pulsante FOCUS/FREEZE */}
+                    <button
+                        onClick={handleFocusToggle}
+                        disabled={!isRunning || isInBreak || isPaused} // Disabilita se non in Run, in Break, o Pausato
+                        className={`group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border transition ${
+                            isFocused 
+                            ? `border-yellow-500/40 bg-yellow-500/10 text-yellow-300 shadow-[0_0_25px_rgba(252,211,77,0.4)]`
+                            : 'border-white/10 bg-white/5 text-neutral-300 hover:border-white/30 hover:text-white'
+                        } disabled:cursor-not-allowed disabled:opacity-40`}
+                        title={isFocused ? "Riprendi Timer (Focus Attivo)" : "Attiva Focus (Ferma Timer Sezione)"}
+                    >
+                        <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
+                        <Target size={22} className="relative" />
+                    </button>
 
                     {/* Pulsante Skip Forward */}
                     <button
                         onClick={() => goToNextPhase(true)}
-                        disabled={!isRunning || isInBreak || currentPhase === 'D'}
+                        disabled={!isRunning || isInBreak || currentPhase === 'D' || isFocused} // AGGIUNTO: Disabilita se in Focus
                         className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         title="Sezione successiva"
                     >
@@ -1166,6 +1266,13 @@ const ABCDMetronome = () => {
                             <li><span className="font-semibold text-neutral-200">C – 105%</span> sfida e resistenza</li>
                             <li><span className="font-semibold text-neutral-200">D – 100%</span> naturalezza e obiettivo</li>
                             </ul>
+                        </div>
+                        
+                        <div className="border-t border-white/10 pt-4 space-y-3">
+                            <h4 className="text-lg font-semibold text-neutral-200">Controllo Focus (Novità)</h4>
+                            <p className="text-base text-neutral-400">
+                            Il pulsante **Focus** (Target icona) ti permette di mettere in pausa il timer della fase corrente. Il metronomo **continuerà** a suonare al BPM attuale, permettendoti di esercitarti finché non sei pronto a ripartire. Premi di nuovo il pulsante per far riprendere il timer da dove si era interrotto.
+                            </p>
                         </div>
 
                         <div className="border-t border-white/10 pt-4 space-y-3">
