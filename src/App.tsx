@@ -697,10 +697,11 @@ const ABCDMetronome = () => {
   return (
 <div className="relative min-h-screen overflow-hidden bg-[#0b0d0e] text-white flex justify-center">
 
+
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
       <div className="pointer-events-none absolute -bottom-32 left-[12%] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,_rgba(96,129,118,0.18),_transparent_68%)] blur-3xl" />
       <div className="pointer-events-none absolute -top-48 right-[-10%] h-[620px] w-[620px] rounded-full bg-[radial-gradient(circle,_rgba(71,85,105,0.16),_transparent_70%)] blur-3xl" />
-<div className="relative z-10 mx-auto w-full max-w-[95%] sm:max-w-6xl px-4 sm:px-8 pb-16 pt-10">
+<div className="relative z-10 mx-auto w-full max-w-[95%] sm:max-w-6xl px-6 sm:px-8 pb-16 pt-10 scale-[0.88] origin-top sm:scale-100 sm:w-full sm:origin-center">
 
         <motion.header
           variants={fadeUp}
@@ -1273,14 +1274,14 @@ const ABCDMetronome = () => {
                         <div className="border-t border-white/10 pt-4 space-y-3">
                             <h4 className="text-lg font-semibold text-neutral-200">Controllo Focus (Novità)</h4>
                             <p className="text-base text-neutral-400">
-                            Il pulsante **Focus** (Target icona) ti permette di mettere in pausa il timer della fase corrente. Il metronomo **continuerà** a suonare al BPM attuale, permettendoti di esercitarti finché non sei pronto a ripartire. Premi di nuovo il pulsante per far riprendere il timer da dove si era interrotto.
+                            Il pulsante Focus ti permette di mettere in pausa il timer della fase corrente. Il metronomo continuerà a suonare al BPM attuale, permettendoti di esercitarti finché non sei pronto a ripartire. Premi di nuovo il pulsante per far riprendere il timer da dove si era interrotto.
                             </p>
                         </div>
 
                         <div className="border-t border-white/10 pt-4 space-y-3">
                             <h4 className="text-lg font-semibold text-neutral-200">Personalizzazione</h4>
                             <p className="text-base text-neutral-400">
-                            Puoi modificare durate e velocità come vuoi cliccando la sezione **"Settings"**: qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perchè è ovviamente pari al 100%).
+                            Puoi modificare durate e velocità come vuoi cliccando la sezione "Settings": qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perchè è ovviamente pari al 100%).
                             </p>
                         </div>
 
