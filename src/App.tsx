@@ -409,6 +409,7 @@ const ABCDMetronome = () => {
       setCurrentPhase('A');
       setTimeRemaining(phaseDurations['A'] * 60);
     }
+    
   };
 
 
@@ -475,7 +476,7 @@ const ABCDMetronome = () => {
         setTimeRemaining(prev => {
           
           // --- LOGICA AVVISO 10 SECONDI (SOUND) ---
-          if (prev === 11) {
+          if (prev === 11 || prev === 10) {
              playWarningSound();
           }
           // --- FINE LOGICA AVVISO ---
@@ -534,7 +535,7 @@ const ABCDMetronome = () => {
       countdownTimeoutsRef.current = [];
     };
     // AGGIUNTO: isFocused come dependency
-  }, [isRunning, isPaused, isInBreak, isFocused, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages]); 
+  }, [isRunning, isPaused, isInBreak, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages]); 
   // FINE: LOGICA AGGIORNATA DEI TIMER E METRONOMO
 
 
@@ -717,7 +718,7 @@ const ABCDMetronome = () => {
             <span className="pl-2 font-light text-neutral-300">method</span>
           </h1>
           <p className="max-w-xl text-sm text-neutral-500 lg:text-base">
-            prodotto da Batterista Online
+            prodotto da <a href="https://batterista.online">Batterista Online</a>
           </p>
         </motion.header>
         
@@ -927,7 +928,7 @@ const ABCDMetronome = () => {
                     {/* Pulsante Play/Pausa */}
                     <button
                         onClick={handleStartStop}
-                        disabled={isInBreak} // Non disabilitare per isFocused, Play/Pause ferma tutto
+                        // Non disabilitare per isFocused, Play/Pause ferma tutto
                         className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
                         isRunning && !isPaused
                             ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
@@ -1284,6 +1285,16 @@ const ABCDMetronome = () => {
                             Puoi modificare durate e velocità come vuoi cliccando la sezione "Settings": qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perchè è ovviamente pari al 100%).
                             </p>
                         </div>
+                        <div className="mt-8 pt-4 border-t border-white/10 text-center">
+    <a 
+        href="https://batterista.online" 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className="text-lg font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
+    >
+        Vai al sito Batterista Online
+    </a>
+</div>
 
                         </motion.div>
                     )}
@@ -1298,7 +1309,8 @@ const ABCDMetronome = () => {
           animate="visible"
           className="mt-16 flex flex-col gap-2 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-600 lg:flex-row lg:items-center lg:justify-between"
         >
-          <span>Copyright © Batterista Online - Tutti i diritti riservati - www.batterista.online</span>
+          <span>Copyright © Batterista Online - Tutti i diritti riservati - <a 
+        href="https://batterista.online">www.batterista.online</a></span>
           <span className="text-neutral-500">ABCD method versione 1.7</span>
         </motion.footer>
       </div>
