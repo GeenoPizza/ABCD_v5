@@ -535,7 +535,7 @@ const ABCDMetronome = () => {
       countdownTimeoutsRef.current = [];
     };
     // AGGIUNTO: isFocused come dependency
-  }, [isRunning, isPaused, isInBreak, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages]); 
+  }, [isRunning, isPaused, isInBreak, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages, isFocused]); 
   // FINE: LOGICA AGGIORNATA DEI TIMER E METRONOMO
 
 
