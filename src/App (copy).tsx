@@ -695,13 +695,11 @@ const ABCDMetronome = () => {
   };
 
   return (
-<div className="relative min-h-screen overflow-hidden bg-[#0b0d0e] text-white flex justify-center">
-
+    <div className="relative min-h-screen overflow-hidden bg-[#0b0d0e] text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
       <div className="pointer-events-none absolute -bottom-32 left-[12%] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,_rgba(96,129,118,0.18),_transparent_68%)] blur-3xl" />
       <div className="pointer-events-none absolute -top-48 right-[-10%] h-[620px] w-[620px] rounded-full bg-[radial-gradient(circle,_rgba(71,85,105,0.16),_transparent_70%)] blur-3xl" />
-<div className="relative z-10 mx-auto w-full max-w-[95%] sm:max-w-6xl px-4 sm:px-8 pb-16 pt-10">
-
+      <div className="relative z-10 mx-auto max-w-6xl px-6 pb-20 pt-12 sm:px-10">
         <motion.header
           variants={fadeUp}
           initial="hidden"
@@ -810,7 +808,7 @@ const ABCDMetronome = () => {
                                     ref={metronomeContentRef} // Aggiunge il ref per la misurazione
                                 > 
                                     <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
-                                    <div className="relative mx-auto flex h-52 w-52 sm:h-64 sm:w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
+                                    <div className="relative mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
                                         <div
                                         className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
                                         style={{
