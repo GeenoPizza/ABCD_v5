@@ -691,9 +691,9 @@ const ABCDMetronome = () => {
 
   // Nuova funzione per creare il glow multi-colore
   const getGlobalResetGlow = () => {
-    const colors = phaseOrder.map(key => hexToRgba(phaseStyles[key].accent, 0.25));
+    const colors = phaseOrder.map(key => hexToRgba(phaseStyles[key].accent, 0.15));
   return `
-    0 0 5px ${colors[0]}, /* Ombra sottile per il colore base */
+    
     0 0 20px ${colors[0]}, /* Ombra A (es. in alto a sx) */
     0 0 20px ${colors[1]}, /* Ombra B (es. in alto a dx) */
     0 0 20px ${colors[2]}, /* Ombra C (es. in basso a sx) */
@@ -702,7 +702,7 @@ const ABCDMetronome = () => {
 };
 
   return (
-<div className="relative min-h-screen overflow-hidden bg-[#0b0d0e] text-white flex justify-center">
+<div className="relative min-h-screen overflow-hidden max-w-full w-full bg-[#0b0d0e] text-white flex justify-center">
 
 
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
