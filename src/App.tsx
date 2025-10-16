@@ -691,9 +691,15 @@ const ABCDMetronome = () => {
 
   // Nuova funzione per creare il glow multi-colore
   const getGlobalResetGlow = () => {
-    const colors = phaseOrder.map(key => hexToRgba(phaseStyles[key].accent, 0.45));
-    return `0 0 10px ${colors[0]}, 0 0 10px ${colors[1]}, 0 0 10px ${colors[2]}, 0 0 10px ${colors[3]}`;
-  };
+    const colors = phaseOrder.map(key => hexToRgba(phaseStyles[key].accent, 0.7));
+  return `
+    0 0 5px ${colors[0]}, /* Ombra sottile per il colore base */
+    0 0 20px ${colors[0]}, /* Ombra A (es. in alto a sx) */
+    0 0 20px ${colors[1]}, /* Ombra B (es. in alto a dx) */
+    0 0 20px ${colors[2]}, /* Ombra C (es. in basso a sx) */
+    0 0 20px ${colors[3]}  /* Ombra D (es. in basso a dx) */
+  `;
+};
 
   return (
 <div className="relative min-h-screen overflow-hidden bg-[#0b0d0e] text-white flex justify-center">
@@ -892,25 +898,20 @@ const ABCDMetronome = () => {
                     </div>
                     <div className="flex items-center gap-4"> 
                     
-                    {/* Pulsante Reset Globale - NUOVO GLOW ABCD */}
-                    <button
-                        onClick={handleReset}
-                        className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
-                        title="Reset (ricomincia da A)"
-                        style={{ boxShadow: `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.0)}`, transition: 'box-shadow 0.3s ease-in-out' }} 
-                        // Il glow ABCD è applicato al hover o se disattivato
-                        onMouseOver={(e) => {
-                            if (!isRunning || isPaused || isFocused) { // AGGIUNTO: Controlla anche isFocused
-                                e.currentTarget.style.boxShadow = getGlobalResetGlow();
-                            }
-                        }}
-                        onMouseOut={(e) => {
-                            e.currentTarget.style.boxShadow = `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.0)}`;
-                        }}
-                    >
-                        <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
-                        <RotateCcw size={22} className="relative" />
-                    </button>
+    {/* Pulsante Reset Globale - GLOW MULTICOLORE PERMANENTE ABCD */}
+    <button
+        onClick={handleReset}
+        className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
+        title="Reset (ricomincia da A)"
+        // Applica il glow ABCD in modo permanente
+        style={{ 
+            boxShadow: getGlobalResetGlow(),
+            transition: 'box-shadow 0.3s ease-in-out'
+        }} 
+    >
+        <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
+        <RotateCcw size={22} className="relative" />
+    </button>
 
                     {/* Pulsante Reset Fase Corrente - GLOW COLORE CORRENTE */}
                     <button
