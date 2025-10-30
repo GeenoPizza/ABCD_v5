@@ -113,8 +113,7 @@ const ABCDMetronome = () => {
   
   // RIFERIMENTO PER LA FASE SUCCESSIVA AL BREAK (FIX LOGICA)
   const nextPhaseOnBreakEndRef = useRef<PhaseKey>('A'); 
-  // Aggiungi questo ref in cima al componente (dopo gli altri useRef, circa linea 115):
-const breakStartedRef = useRef(false);
+  
   // ** STATO E REF PER FISSARE LE DIMENSIONI **
   const metronomeContentRef = useRef<HTMLDivElement>(null);
   const [contentDimensions, setContentDimensions] = useState<{ width: string, height: string } | null>(null);
@@ -382,8 +381,6 @@ const playEndOfPhaseSound = () => {
   countdownTimeoutsRef.current = [];
   setIsFocused(false);
   
-  breakStartedRef.current = true; // ← AGGIUNGI QUESTO
-  
   // Imposta il riferimento per la fase successiva
   nextPhaseOnBreakEndRef.current = phaseToStartAfterBreak;
 
@@ -440,12 +437,11 @@ const playEndOfPhaseSound = () => {
 
   // 3. Fine del break e passaggio alla fase.
   const t7 = setTimeout(() => {
-  setIsInBreak(false);
-  setCountdownBeat(0);
-  setCurrentPhase(phaseToStartAfterBreak);
-  setTimeRemaining(phaseDurations[phaseToStartAfterBreak] * 60);
-  breakStartedRef.current = false; // ← AGGIUNGI QUESTO
-}, halfNoteDuration * 2 + quarterNoteDuration * 4);
+    setIsInBreak(false);
+    setCountdownBeat(0);
+    setCurrentPhase(phaseToStartAfterBreak);
+    setTimeRemaining(phaseDurations[phaseToStartAfterBreak] * 60);
+  }, halfNoteDuration * 2 + quarterNoteDuration * 4);
 
   countdownTimeoutsRef.current = [t1, tick1, t2, tick2, t3, t4, t5, t6, t7];
 };
@@ -609,12 +605,12 @@ useEffect(() => {
   }
 
   // Riprendi il break se era in pausa
-if (isRunning && !isPaused && isInBreak && countdownTimeoutsRef.current.length === 0 && !breakStartedRef.current) {
-  const phaseToStart = nextPhaseOnBreakEndRef.current;
-  setTimeout(() => {
-    startBreak(phaseToStart);
-  }, 50);
-}
+  if (isRunning && !isPaused && isInBreak && countdownTimeoutsRef.current.length === 0) {
+    const phaseToStart = nextPhaseOnBreakEndRef.current;
+    setTimeout(() => {
+      startBreak(phaseToStart);
+    }, 50);
+  }
 
   return () => {
     stopMetronome();
@@ -666,32 +662,27 @@ if (isRunning && !isPaused && isInBreak && countdownTimeoutsRef.current.length =
   // ** FINE EFFECT **
 
   const handleStartStop = () => {
-  if (isRunning) {
-    setIsPaused(!isPaused);
-    setIsFocused(false); // FORZA L'USCITA dal Focus se si pausa
-    
-    // ← AGGIUNGI QUESTO: Reset del flag quando si mette in pausa
-    if (!isPaused && isInBreak) {
-      breakStartedRef.current = false;
-    }
-  } else {
-    ensureAudioContext();
-    resumeAudioContext();
-    setIsPaused(false);
-    setIsFocused(false);
-    setIsInInterPhasePause(false);
-    setTotalTimeRemaining(calculateTotalTime(phaseDurations));
-    
-    // Prima imposta il break, POI isRunning
-    setIsInBreak(true); // Importante: prima del setIsRunning
-    setIsRunning(true);
-    
-    // Chiama startBreak dopo che lo stato si è aggiornato
-    setTimeout(() => {
-      startBreak('A');
-    }, 50);
-  }
-};
+    if (isRunning) {
+      setIsPaused(!isPaused);
+      setIsFocused(false); // FORZA L'USCITA dal Focus se si pausa
+    } else {
+  ensureAudioContext();
+  resumeAudioContext();
+  setIsPaused(false);
+  setIsFocused(false);
+  setIsInInterPhasePause(false);
+  setTotalTimeRemaining(calculateTotalTime(phaseDurations));
+  
+  // Prima imposta il break, POI isRunning
+  setIsInBreak(true); // Importante: prima del setIsRunning
+  setIsRunning(true);
+  
+  // Chiama startBreak dopo che lo stato si è aggiornato
+  setTimeout(() => {
+    startBreak('A');
+  }, 50);
+}
+  };
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === ' ') {
