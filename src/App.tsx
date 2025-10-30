@@ -225,7 +225,7 @@ const ABCDMetronome = () => {
     const now = ctx.currentTime;
     const frequencies = [660, 784, 988]; // Mi, Sol, Si
     const duration = 0.1;
-    const delay = 0.15; // Ritardo tra i beep
+    const delay = 0.1; // Ritardo tra i beep
 
     frequencies.forEach((freq, index) => {
         const osc = ctx.createOscillator();
@@ -453,18 +453,25 @@ const playEndOfPhaseSound = () => {
   countdownTimeoutsRef.current = [];
   stopMetronome();
   if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+  if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
   
   // Quando si salta una fase, si esce anche dal focus
   setIsFocused(false);
   setIsInInterPhasePause(false); // Reset pausa inter-fase
 
-  const phaseToTransitionFrom = isInBreak ? nextPhaseOnBreakEndRef.current : currentPhase;
-  const currentIndex = phaseOrder.indexOf(phaseToTransitionFrom);
+  const currentIndex = phaseOrder.indexOf(currentPhase);
 
   if (currentIndex < phaseOrder.length - 1) {
     // Prossima fase nella sequenza
     const nextPhase = phaseOrder[currentIndex + 1];
+    
+    // IMPORTANTE: Aggiorna subito nextPhaseOnBreakEndRef per evitare che l'useEffect richiami la fase sbagliata
+    nextPhaseOnBreakEndRef.current = nextPhase;
+    
     setIsInBreak(true); // Imposta break PRIMA di chiamare startBreak
+    setCurrentPhase(nextPhase); // Aggiorna anche currentPhase subito
+    setTimeRemaining(phaseDurations[nextPhase] * 60); // Imposta il tempo della nuova fase
+    
     setTimeout(() => {
       startBreak(nextPhase);
     }, 50);
@@ -475,6 +482,7 @@ const playEndOfPhaseSound = () => {
     setIsInBreak(false);
     setCurrentPhase('A');
     setTimeRemaining(phaseDurations['A'] * 60);
+    nextPhaseOnBreakEndRef.current = 'A';
   }
 };
 
@@ -511,97 +519,108 @@ const playEndOfPhaseSound = () => {
 
 
   // INIZIO: LOGICA AGGIORNATA DEI TIMER E METRONOMO
-  useEffect(() => {
-    
-    
-    // Logica per riprendere un break in pausa
-    
-    // 1. --- Metronome Control ---
-// Il metronomo gira se running, non in pausa, non in break E non in pausa inter-fase
-if (isRunning && !isPaused && !isInBreak && !isInInterPhasePause) {
-  startMetronome();
-} else {
-  stopMetronome();
-}
-
-    // 2. --- Phase and Global Timer Control (SI FERMA se focused) ---
-    if (isRunning && !isPaused && !isInBreak && !isFocused) {
-      
-      // Avvia Timer Globale (tempo totale rimanente)
-      if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); }
-      globalIntervalRef.current = setInterval(() => {
-        setTotalTimeRemaining(prev => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
-
-      // Avvia Timer di Fase (tempo rimanente nella fase corrente)
-      if (intervalIdRef.current) { clearInterval(intervalIdRef.current); }
-      intervalIdRef.current = setInterval(() => {
-        setTimeRemaining(prev => {
-          
-          // --- LOGICA AVVISO 10 SECONDI (SOUND) ---
-          if (prev === 11 || prev === 10) {
-             playWarningSound();
-          }
-          // --- FINE LOGICA AVVISO ---
-
-          if (prev <= 1) {
-  stopMetronome();
-  if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
-  
-  // Suona il suono di fine sezione
-  playEndOfPhaseSound();
-
-  const currentIndex = phaseOrder.indexOf(currentPhase);
-
-  if (currentIndex < phaseOrder.length - 1) {
-    // Attiva la pausa tra le fasi
-    setIsInInterPhasePause(true);
-    setInterPhasePauseRemaining(INTER_PHASE_PAUSE_SECONDS);
-    
-    // Ferma il metronomo prima della pausa
-stopMetronome();
-
-    // Timer per la pausa
-let pauseCounter = INTER_PHASE_PAUSE_SECONDS;
-// Primo tick dopo 1 secondo, poi ogni secondo
-const pauseInterval = setInterval(() => {
-  pauseCounter--;
-  setInterPhasePauseRemaining(pauseCounter);
-  
-  if (pauseCounter <= 0) {
-    clearInterval(pauseInterval);
-    setTimeout(() => {
-      setIsInInterPhasePause(false);
-      // Dopo la pausa, inizia il break della prossima fase
-      const nextPhase = phaseOrder[currentIndex + 1];
-      startBreak(nextPhase);
-    }, 100);
-  }
-}, 1000);
+useEffect(() => {
+  // 1. --- Metronome Control ---
+  // Il metronomo gira se running, non in pausa, non in break E non in pausa inter-fase
+  if (isRunning && !isPaused && !isInBreak && !isInInterPhasePause) {
+    startMetronome();
   } else {
-    // Fine del ciclo
-    setIsRunning(false);
-    setCurrentPhase('A');
-    setTimeRemaining(phaseDurations['A'] * 60);
-    setTotalTimeRemaining(0);
+    stopMetronome();
   }
-  return 0;
-}
- return prev - 1;
-  });
-}, 1000);
-}
 
-    return () => {
-      stopMetronome();
-      if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
-      if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
-      countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
-      countdownTimeoutsRef.current = [];
-    };
-    // AGGIUNTO: isFocused come dependency
-  }, [isRunning, isPaused, isInBreak, isInInterPhasePause, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages, isFocused]); 
-  // FINE: LOGICA AGGIORNATA DEI TIMER E METRONOMO
+  // 2. --- Phase and Global Timer Control (SI FERMA se focused) ---
+  if (isRunning && !isPaused && !isInBreak && !isFocused) {
+    
+    // Avvia Timer Globale (tempo totale rimanente)
+    if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); }
+    globalIntervalRef.current = setInterval(() => {
+      setTotalTimeRemaining(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    // Avvia Timer di Fase (tempo rimanente nella fase corrente)
+    if (intervalIdRef.current) { clearInterval(intervalIdRef.current); }
+    intervalIdRef.current = setInterval(() => {
+      setTimeRemaining(prev => {
+        
+        // --- LOGICA AVVISO 10 SECONDI (SOUND) ---
+        if (prev === 11 || prev === 10) {
+           playWarningSound();
+        }
+        // --- FINE LOGICA AVVISO ---
+
+        if (prev <= 1) {
+          stopMetronome();
+          if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+          
+          // Suona il suono di fine sezione
+          playEndOfPhaseSound();
+
+          const currentIndex = phaseOrder.indexOf(currentPhase);
+
+          if (currentIndex < phaseOrder.length - 1) {
+            // Attiva la pausa tra le fasi
+            setIsInInterPhasePause(true);
+            setInterPhasePauseRemaining(INTER_PHASE_PAUSE_SECONDS);
+            
+            // Ferma il metronomo prima della pausa
+            stopMetronome();
+
+            // Timer per la pausa - primo decremento dopo 1 secondo per evitare doppio 5
+            let pauseCounter = INTER_PHASE_PAUSE_SECONDS;
+
+            setTimeout(() => {
+              pauseCounter--;
+              setInterPhasePauseRemaining(pauseCounter);
+              
+              const pauseInterval = setInterval(() => {
+                pauseCounter--;
+                setInterPhasePauseRemaining(pauseCounter);
+                
+                if (pauseCounter <= 0) {
+                  clearInterval(pauseInterval);
+                  setTimeout(() => {
+                    setIsInInterPhasePause(false);
+                    const nextPhase = phaseOrder[currentIndex + 1];
+                    startBreak(nextPhase);
+                  }, 100);
+                }
+              }, 1000);
+            }, 1000);
+          } else {
+            // Fine del ciclo
+            setIsRunning(false);
+            setCurrentPhase('A');
+            setTimeRemaining(phaseDurations['A'] * 60);
+            setTotalTimeRemaining(0);
+          }
+          return 0; 
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  } else {
+    // Ferma Timer di Fase e Globale quando pausato, in break, o FOCUSED
+    if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+    if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+  }
+
+  // Riprendi il break se era in pausa
+  if (isRunning && !isPaused && isInBreak && countdownTimeoutsRef.current.length === 0) {
+    const phaseToStart = nextPhaseOnBreakEndRef.current;
+    setTimeout(() => {
+      startBreak(phaseToStart);
+    }, 50);
+  }
+
+  return () => {
+    stopMetronome();
+    if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+    if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+    countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+    countdownTimeoutsRef.current = [];
+  };
+}, [isRunning, isPaused, isInBreak, isInInterPhasePause, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages, isFocused]); 
+// FINE: LOGICA AGGIORNATA DEI TIMER E METRONOMO
 
 
   useEffect(() => {
@@ -784,13 +803,13 @@ const pauseInterval = setInterval(() => {
 };
 
   return (
-<div className="relative min-h-screen overflow-hidden max-w-full w-full bg-[#0b0d0e] text-white flex justify-center">
+<div className="relative min-h-screen overflow-hidden overflow-x-hidden max-w-full w-full bg-[#0b0d0e] text-white flex justify-center">
 
 
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
       <div className="pointer-events-none absolute -bottom-32 left-[12%] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,_rgba(96,129,118,0.18),_transparent_68%)] blur-3xl" />
       <div className="pointer-events-none absolute -top-48 right-[-10%] h-[620px] w-[620px] rounded-full bg-[radial-gradient(circle,_rgba(71,85,105,0.16),_transparent_70%)] blur-3xl" />
-<div className="relative z-10 mx-auto w-full max-w-[95%] sm:max-w-6xl px-6 sm:px-8 pb-16 pt-10 scale-[0.88] origin-top sm:scale-100 sm:w-full sm:origin-center">
+<div className="relative z-10 mx-auto w-full max-w-full sm:max-w-6xl px-6 sm:px-8 pb-8 pt-6 sm:pb-16 sm:pt-10 scale-[0.88] origin-center sm:scale-100">
 
         <motion.header
           variants={fadeUp}
