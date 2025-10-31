@@ -826,7 +826,7 @@ useEffect(() => {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
       <div className="pointer-events-none absolute -bottom-32 left-[12%] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,_rgba(96,129,118,0.18),_transparent_68%)] blur-3xl" />
       <div className="pointer-events-none absolute -top-48 right-[-10%] h-[620px] w-[620px] rounded-full bg-[radial-gradient(circle,_rgba(71,85,105,0.16),_transparent_70%)] blur-3xl" />
-<div className="relative z-10 mx-auto w-full max-w-full sm:max-w-6xl px-6 sm:px-8 pb-8 pt-6 sm:pb-16 sm:pt-10 scale-[0.88] origin-center sm:scale-100">
+<div className="relative z-10 mx-auto w-full max-w-full sm:max-w-6xl px-8 sm:px-8 pb-8 pt-0 sm:pb-16 sm:pt-10 scale-[0.88] origin-center sm:scale-100">
 
         <motion.header
           variants={fadeUp}
@@ -834,7 +834,7 @@ useEffect(() => {
           animate="visible"
           className="flex flex-col gap-5 text-center lg:text-left"
         >
-          <h1 className="text-4xl font-light leading-tight text-neutral-100 sm:text-5xl lg:text-[3.35rem]">
+          <h1 className="text-5xl font-light leading-tight text-neutral-100 sm:text-5xl lg:text-5xl xl:text-[3.35rem]">
             <span className="font-semibold text-[#88a7d0]">A</span>
             <span className="font-semibold text-[#c2b68a]">B</span>
             <span className="font-semibold text-[#d9a88a]">C</span>
@@ -863,13 +863,13 @@ useEffect(() => {
 
         {/* CONTENITORE PRINCIPALE (GESTISCE L'ORDINE MOBILE E IL LAYOUT DESKTOP COMPATTO) */}
         <motion.div
-            className="mt-14 flex flex-col gap-8 lg:flex-row lg:justify-between" 
-            variants={staggerParent}
-            initial="hidden"
-            animate="visible"
-        >
+    className="mt-14 flex flex-col gap-8 items-center lg:flex-row lg:justify-between lg:items-start" 
+    variants={staggerParent}
+    initial="hidden"
+    animate="visible"
+>
             {/* COLONNA DI SINISTRA (lg:w-7/12 - Metronomo, Controlli) */}
-            <div className="flex flex-col gap-8 lg:w-7/12"> 
+            <div className="flex flex-col gap-8 w-full max-w-2xl lg:max-w-none lg:w-7/12"> 
                 
                 {/* 1. SEZIONE METRONOMO: order-1 (Mobile/Desktop) */}
                 <motion.section
@@ -1082,7 +1082,7 @@ useEffect(() => {
     ? <Pause size={24} className="relative" /> 
     : <Play size={24} className="relative" />}
   {/* LOGICA TESTO */}
-  <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
+  <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Start' : 'Start'}</span>
 </button>
                     
                     {/* AGGIUNTO: Pulsante FOCUS/FREEZE */}
@@ -1130,7 +1130,7 @@ useEffect(() => {
             </div>
             
             {/* COLONNA DI DESTRA (lg:w-5/12 - Tempo, Overview, Settings, Info) */}
-            <div className="flex flex-col gap-8 lg:w-5/12"> 
+            <div className="flex flex-col gap-8 w-full max-w-2xl lg:max-w-none lg:w-5/12"> 
                 
                 {/* 2. TEMPO COMPLESSIVO: order-3 (Mobile) / lg:order-1 (Desktop) */}
                 <motion.div

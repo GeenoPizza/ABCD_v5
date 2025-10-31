@@ -19,7 +19,7 @@ type PhaseDurations = Record<PhaseKey, number>;
 type PhasePercentages = Record<PhaseKey, number>;
 
 const phaseOrder: PhaseKey[] = ['A', 'B', 'C', 'D'];
-
+const INTER_PHASE_PAUSE_SECONDS = 5;
 const phaseStyles: Record<PhaseKey, PhaseStyle> = {
   A: { name: 'Attenzione', color: 'from-[#4d6bb3] to-[#345997]', textColor: 'text-[#98b5f5]', accent: '#5f8dff', globalBarColor: '#537abf' }, 
   B: { name: 'Base', color: 'from-[#d8a343] to-[#b9852c]', textColor: 'text-[#f4d48a]', accent: '#f1b54f', globalBarColor: '#d6a855' }, 
@@ -93,6 +93,8 @@ const ABCDMetronome = () => {
   const [timeRemaining, setTimeRemaining] = useState(defaultPhaseDurations.A * 60);
   const [totalTimeRemaining, setTotalTimeRemaining] = useState(calculateTotalTime(defaultPhaseDurations));
   const [isInBreak, setIsInBreak] = useState(false);
+  const [isInInterPhasePause, setIsInInterPhasePause] = useState(false);
+  const [interPhasePauseRemaining, setInterPhasePauseRemaining] = useState(0);
   const [countdownBeat, setCountdownBeat] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false); 
@@ -111,7 +113,11 @@ const ABCDMetronome = () => {
   
   // RIFERIMENTO PER LA FASE SUCCESSIVA AL BREAK (FIX LOGICA)
   const nextPhaseOnBreakEndRef = useRef<PhaseKey>('A'); 
-  
+  // Aggiungi questo ref in cima al componente (dopo gli altri useRef, circa linea 115):
+const breakStartedRef = useRef(false);
+const phaseEndHandledRef = useRef(false);
+// Dopo gli altri useRef (circa linea 115):
+const interPauseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // ** STATO E REF PER FISSARE LE DIMENSIONI **
   const metronomeContentRef = useRef<HTMLDivElement>(null);
   const [contentDimensions, setContentDimensions] = useState<{ width: string, height: string } | null>(null);
@@ -223,7 +229,7 @@ const ABCDMetronome = () => {
     const now = ctx.currentTime;
     const frequencies = [660, 784, 988]; // Mi, Sol, Si
     const duration = 0.1;
-    const delay = 0.15; // Ritardo tra i beep
+    const delay = 0.1; // Ritardo tra i beep
 
     frequencies.forEach((freq, index) => {
         const osc = ctx.createOscillator();
@@ -246,6 +252,39 @@ const ABCDMetronome = () => {
         osc.stop(endTime);
     });
   };
+const playEndOfPhaseSound = () => {
+  if (!ensureAudioContext()) return;
+  resumeAudioContext();
+
+  const ctx = audioContextRef.current;
+  if (!ctx || !masterGainRef.current) return;
+
+  const now = ctx.currentTime;
+  const frequencies = [880, 1046, 1318, 1046, 880]; // Sequenza ascendente-discendente
+  const duration = 0.15;
+  const delay = 0.18;
+
+  frequencies.forEach((freq, index) => {
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    osc.connect(gainNode);
+    gainNode.connect(masterGainRef.current!);
+
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+
+    const startTime = now + index * delay;
+    const endTime = startTime + duration;
+
+    gainNode.gain.setValueAtTime(0.0, startTime);
+    gainNode.gain.linearRampToValueAtTime(0.4, startTime + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+    osc.start(startTime);
+    osc.stop(endTime);
+  });
+};
 
   const playTickSound = () => { 
     if (!ensureAudioContext()) {
@@ -341,99 +380,143 @@ const ABCDMetronome = () => {
 
   // FIX: startBreak accetta la *prossima* fase che deve partire DOPO il break.
   const startBreak = (phaseToStartAfterBreak: PhaseKey) => {
-    // 1. Pulizia e setup del break
-    countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
-    countdownTimeoutsRef.current = [];
-    setIsFocused(false); // FORZA L'USCITA dal Focus quando inizia il Break
-    
-    // Imposta il riferimento per la fase successiva
-    nextPhaseOnBreakEndRef.current = phaseToStartAfterBreak;
+  // 1. Pulizia e setup del break
+  countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+  countdownTimeoutsRef.current = [];
+  setIsFocused(false);
+  
+  breakStartedRef.current = true; // ← AGGIUNGI QUESTO
+  phaseEndHandledRef.current = false;
+  
+  // Imposta il riferimento per la fase successiva
+  nextPhaseOnBreakEndRef.current = phaseToStartAfterBreak;
 
-    setIsInBreak(true);
-    setIsPaused(false); 
-    setCountdownBeat(0);
-    
-    // Aggiorna il tempo totale rimanente
-    setTotalTimeRemaining(calculateRemainingTime(phaseToStartAfterBreak));
+  setIsInBreak(true);
+  setIsPaused(false); 
+  setCountdownBeat(0);
+  
+  // Aggiorna il tempo totale rimanente
+  setTotalTimeRemaining(calculateRemainingTime(phaseToStartAfterBreak));
 
-    // Il metronomo (e il countdown) usano il BPM della fase successiva
-    const nextBPM = Math.round(targetBPM * getPhasePercentage(phaseToStartAfterBreak));
-    const halfNoteDuration = (60 / nextBPM) * 2 * 1000;
-    const quarterNoteDuration = (60 / nextBPM) * 1000;
-    
-    // 2. Scheduler del Countdown (4 beats totali - 2 lenti, 4 veloci)
-    const t1 = setTimeout(() => { playCountSound(1, halfNoteDuration); setCountdownBeat(1); }, 0);
-    const tick1 = setTimeout(() => { playTickSound(); }, quarterNoteDuration);
-    const t2 = setTimeout(() => { playCountSound(2, halfNoteDuration); setCountdownBeat(2); }, halfNoteDuration);
-    const tick2 = setTimeout(() => { playTickSound(); }, halfNoteDuration + quarterNoteDuration);
-    
-    const t3 = setTimeout(() => { playCountSound(1, quarterNoteDuration); setCountdownBeat(3); }, halfNoteDuration * 2);
-    const t4 = setTimeout(() => { playCountSound(2, quarterNoteDuration); setCountdownBeat(4); }, halfNoteDuration * 2 + quarterNoteDuration);
-    const t5 = setTimeout(() => { playCountSound(3, quarterNoteDuration); setCountdownBeat(5); }, halfNoteDuration * 2 + quarterNoteDuration * 2);
-    const t6 = setTimeout(() => { playCountSound(4, quarterNoteDuration); setCountdownBeat(6); }, halfNoteDuration * 2 + quarterNoteDuration * 3);
+  // Il metronomo (e il countdown) usano il BPM della fase successiva
+  const nextBPM = Math.round(targetBPM * getPhasePercentage(phaseToStartAfterBreak));
+  const halfNoteDuration = (60 / nextBPM) * 2 * 1000;
+  const quarterNoteDuration = (60 / nextBPM) * 1000;
+  
+  // 2. Scheduler del Countdown
+  const t1 = setTimeout(() => {
+    playCountSound(1, halfNoteDuration);
+    setCountdownBeat(1);
+  }, 0);
+  
+  const tick1 = setTimeout(() => {
+    playTickSound();
+  }, quarterNoteDuration);
+  
+  const t2 = setTimeout(() => {
+    playCountSound(2, halfNoteDuration);
+    setCountdownBeat(2);
+  }, halfNoteDuration);
+  
+  const tick2 = setTimeout(() => {
+    playTickSound();
+  }, halfNoteDuration + quarterNoteDuration);
+  
+  const t3 = setTimeout(() => {
+    playCountSound(1, quarterNoteDuration);
+    setCountdownBeat(3);
+  }, halfNoteDuration * 2);
+  
+  const t4 = setTimeout(() => {
+    playCountSound(2, quarterNoteDuration);
+    setCountdownBeat(4);
+  }, halfNoteDuration * 2 + quarterNoteDuration);
+  
+  const t5 = setTimeout(() => {
+    playCountSound(3, quarterNoteDuration);
+    setCountdownBeat(5);
+  }, halfNoteDuration * 2 + quarterNoteDuration * 2);
+  
+  const t6 = setTimeout(() => {
+    playCountSound(4, quarterNoteDuration);
+    setCountdownBeat(6);
+  }, halfNoteDuration * 2 + quarterNoteDuration * 3);
 
-    // 3. Fine del break e passaggio alla fase.
-    const t7 = setTimeout(() => {
-      setIsInBreak(false);
-      setCountdownBeat(0);
-      setCurrentPhase(phaseToStartAfterBreak); // Usa la fase impostata nel ref/parametro
-      setTimeRemaining(phaseDurations[phaseToStartAfterBreak] * 60);
-      // Il metronomo ripartirà automaticamente grazie all'useEffect.
-    }, halfNoteDuration * 2 + quarterNoteDuration * 4);
+  // 3. Fine del break e passaggio alla fase.
+  const t7 = setTimeout(() => {
+  setIsInBreak(false);
+  setCountdownBeat(0);
+  setCurrentPhase(phaseToStartAfterBreak);
+  setTimeRemaining(phaseDurations[phaseToStartAfterBreak] * 60);
+  breakStartedRef.current = false; // ← AGGIUNGI QUESTO
+  phaseEndHandledRef.current = false;
+}, halfNoteDuration * 2 + quarterNoteDuration * 4);
 
-    countdownTimeoutsRef.current = [t1, tick1, t2, tick2, t3, t4, t5, t6, t7];
-  };
+  countdownTimeoutsRef.current = [t1, tick1, t2, tick2, t3, t4, t5, t6, t7];
+};
 
 
   const goToNextPhase = (manual = false) => {
-    // Se stiamo già in un break, annulliamo i timeout e partiamo con il break per la fase successiva
-    countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
-    countdownTimeoutsRef.current = [];
-    stopMetronome();
-    if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+  // Pulizia completa
+  countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+  countdownTimeoutsRef.current = [];
+  stopMetronome();
+  if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+  if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+  
+  // Quando si salta una fase, si esce anche dal focus
+  setIsFocused(false);
+  setIsInInterPhasePause(false); // Reset pausa inter-fase
+
+  const currentIndex = phaseOrder.indexOf(currentPhase);
+
+  if (currentIndex < phaseOrder.length - 1) {
+    // Prossima fase nella sequenza
+    const nextPhase = phaseOrder[currentIndex + 1];
     
-    // Quando si salta una fase, si esce anche dal focus
-    setIsFocused(false);
-
-    const phaseToTransitionFrom = isInBreak ? nextPhaseOnBreakEndRef.current : currentPhase;
-    const currentIndex = phaseOrder.indexOf(phaseToTransitionFrom);
-
-    if (currentIndex < phaseOrder.length - 1) {
-      // Prossima fase nella sequenza
-      const nextPhase = phaseOrder[currentIndex + 1];
+    // IMPORTANTE: Aggiorna subito nextPhaseOnBreakEndRef per evitare che l'useEffect richiami la fase sbagliata
+    nextPhaseOnBreakEndRef.current = nextPhase;
+    
+    setIsInBreak(true); // Imposta break PRIMA di chiamare startBreak
+    setCurrentPhase(nextPhase); // Aggiorna anche currentPhase subito
+    setTimeRemaining(phaseDurations[nextPhase] * 60); // Imposta il tempo della nuova fase
+    
+    setTimeout(() => {
       startBreak(nextPhase);
-    } else if (manual) {
-      // Ultima fase, saltata, si comporta come un reset
-      setTotalTimeRemaining(0);
-      setIsRunning(false);
-      setCurrentPhase('A');
-      setTimeRemaining(phaseDurations['A'] * 60);
-    }
-    
-  };
-
+    }, 50);
+  } else if (manual) {
+    // Ultima fase, saltata, si comporta come un reset
+    setTotalTimeRemaining(0);
+    setIsRunning(false);
+    setIsInBreak(false);
+    setCurrentPhase('A');
+    setTimeRemaining(phaseDurations['A'] * 60);
+    nextPhaseOnBreakEndRef.current = 'A';
+  }
+};
 
   // FUNZIONE RIPETI FASE CORRENTE (FIX LOGICA)
   const handleRestartPhase = () => {
-    if (!isRunning || isInBreak || isFocused) return; // AGGIUNTO: Non riavviare se in focus
+  if (!isRunning || isInBreak || isFocused) return;
 
-    // 1. Ferma i metronomi/timer correnti
-    stopMetronome();
-    if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
-    if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
-    
-    // 2. Calcola il tempo trascorso nella fase attuale (da sottrarre al totale)
-    const phaseDurationSeconds = phaseDurations[currentPhase] * 60;
-    const timeElapsedInPhase = phaseDurationSeconds - timeRemaining;
-    
-    // 3. Resetta il tempo totale globale (aggiungendo il tempo 'perso' indietro)
-    // Questo mantiene il conteggio globale corretto per la barra di progressione.
-    setTotalTimeRemaining(prevTotal => prevTotal + timeElapsedInPhase);
+  // 1. Ferma i metronomi/timer correnti
+  stopMetronome();
+  if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+  if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+  
+  // 2. Calcola il tempo trascorso nella fase attuale
+  const phaseDurationSeconds = phaseDurations[currentPhase] * 60;
+  const timeElapsedInPhase = phaseDurationSeconds - timeRemaining;
+  
+  // 3. Resetta il tempo totale globale
+  setTotalTimeRemaining(prevTotal => prevTotal + timeElapsedInPhase);
 
-    // 4. Riavvia la fase corrente tramite il break
-    // Il break farà il countdown e imposterà 'currentPhase' come fase successiva
+  // 4. Riavvia la fase corrente tramite il break
+  setIsInBreak(true); // Imposta break PRIMA di chiamare startBreak
+  setTimeout(() => {
     startBreak(currentPhase);
-  };
+  }, 50);
+};
   // FINE FUNZIONE RIPETI FASE
 
   // AGGIUNTO: Funzione per il Focus/Freeze
@@ -445,98 +528,87 @@ const ABCDMetronome = () => {
 
 
   // INIZIO: LOGICA AGGIORNATA DEI TIMER E METRONOMO
-  useEffect(() => {
-    let shouldRestartBreak = false;
+useEffect(() => {
+  // 1. --- Metronome Control ---
+  // Il metronomo gira se running, non in pausa, non in break E non in pausa inter-fase
+  if (isRunning && !isPaused && !isInBreak && !isInInterPhasePause) {
+    startMetronome();
+  } else {
+    stopMetronome();
+  }
+
+  // 2. --- Phase and Global Timer Control (SI FERMA se focused) ---
+  if (isRunning && !isPaused && !isInBreak && !isFocused) {
     
-    // Logica per riprendere un break in pausa
-    if (isRunning && !isPaused && isInBreak && countdownTimeoutsRef.current.length === 0) {
-        shouldRestartBreak = true;
-    }
-    
-    // 1. --- Metronome Control ---
-    // Il metronomo gira se running, non in pausa, e non in break (anche se isFocused)
-    if (isRunning && !isPaused && !isInBreak) {
-      startMetronome();
-    } else {
-      stopMetronome();
-    }
+    // Avvia Timer Globale (tempo totale rimanente)
+    if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); }
+    globalIntervalRef.current = setInterval(() => {
+      setTotalTimeRemaining(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
 
-    // 2. --- Phase and Global Timer Control (SI FERMA se focused) ---
-    if (isRunning && !isPaused && !isInBreak && !isFocused) {
-      
-      // Avvia Timer Globale (tempo totale rimanente)
-      if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); }
-      globalIntervalRef.current = setInterval(() => {
-        setTotalTimeRemaining(prev => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
-
-      // Avvia Timer di Fase (tempo rimanente nella fase corrente)
-      if (intervalIdRef.current) { clearInterval(intervalIdRef.current); }
-      intervalIdRef.current = setInterval(() => {
-        setTimeRemaining(prev => {
-          
-          // --- LOGICA AVVISO 10 SECONDI (SOUND) ---
-          if (prev === 11 || prev === 10) {
-             playWarningSound();
-          }
-          // --- FINE LOGICA AVVISO ---
-
-          if (prev <= 1) {
-            stopMetronome();
-            if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
-
-            const currentIndex = phaseOrder.indexOf(currentPhase);
-
-            if (currentIndex < phaseOrder.length - 1) {
-              const nextPhase = phaseOrder[currentIndex + 1];
-              startBreak(nextPhase); // Passa la fase successiva
-            } else {
-              // Fine del ciclo
-              setIsRunning(false);
-              setCurrentPhase('A');
-              setTimeRemaining(phaseDurations['A'] * 60);
-              setTotalTimeRemaining(0);
-            }
-            return 0; 
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      // Ferma Timer di Fase e Globale quando pausato, in break, o FOCUSED
-      if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
-      if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
-      
-      // Quando in pausa, interrompi tutti i timeout del countdown
-      countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
-      countdownTimeoutsRef.current = [];
-    }
-    
-    // Se c'è un break in pausa che deve riprendere
-    if (shouldRestartBreak) {
-        const nextPhase = nextPhaseOnBreakEndRef.current; 
+    // Avvia Timer di Fase (tempo rimanente nella fase corrente)
+    if (intervalIdRef.current) { clearInterval(intervalIdRef.current); }
+    intervalIdRef.current = setInterval(() => {
+      setTimeRemaining(prev => {
         
-        if (nextPhase !== 'A' || currentPhase !== 'D') {
-            startBreak(nextPhase);
-        } else {
-            // Se D è finita e il break finale è stato messo in pausa, termina il ciclo
-            setIsRunning(false);
-            setCurrentPhase('A');
-            setTimeRemaining(phaseDurations['A'] * 60);
-            setTotalTimeRemaining(0);
+        // --- LOGICA AVVISO 10 SECONDI (SOUND) ---
+        if (prev === 11 || prev === 10) {
+           playWarningSound();
         }
-    }
+        // --- FINE LOGICA AVVISO ---
 
-    return () => {
-      stopMetronome();
-      if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
-      if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
-      countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
-      countdownTimeoutsRef.current = [];
-    };
-    // AGGIUNTO: isFocused come dependency
-  }, [isRunning, isPaused, isInBreak, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages, isFocused]); 
-  // FINE: LOGICA AGGIORNATA DEI TIMER E METRONOMO
+       if (prev <= 1) {
+  // Usa il flag per evitare doppia esecuzione
+  if (!phaseEndHandledRef.current) {
+    phaseEndHandledRef.current = true;
+    
+    stopMetronome();
+    
+    // Suona il suono di fine sezione
+    playEndOfPhaseSound();
+    const currentIndex = phaseOrder.indexOf(currentPhase);
+    
+    if (currentIndex < phaseOrder.length - 1) {
+      // Attiva solo la pausa, il timer sarà gestito dall'useEffect
+      setIsInInterPhasePause(true);
+      setInterPhasePauseRemaining(INTER_PHASE_PAUSE_SECONDS);
+    } else {
+      // Fine del ciclo
+      setIsRunning(false);
+      setCurrentPhase('A');
+      setTimeRemaining(phaseDurations['A'] * 60);
+      setTotalTimeRemaining(0);
+    }
+  }
+  return 0; 
+}
+return prev - 1;
+      });
+    }, 1000);
+  } else {
+    // Ferma Timer di Fase e Globale quando pausato, in break, o FOCUSED
+    if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+    if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+  }
+
+  // Riprendi il break se era in pausa
+if (isRunning && !isPaused && isInBreak && countdownTimeoutsRef.current.length === 0 && !breakStartedRef.current) {
+  const phaseToStart = nextPhaseOnBreakEndRef.current;
+  setTimeout(() => {
+    startBreak(phaseToStart);
+  }, 50);
+}
+
+  return () => {
+  stopMetronome();
+  if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+  if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+  if (interPauseIntervalRef.current) { clearInterval(interPauseIntervalRef.current); interPauseIntervalRef.current = null; } // ← AGGIUNGI
+  // countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+  // countdownTimeoutsRef.current = [];
+};
+}, [isRunning, isPaused, isInBreak, isInInterPhasePause, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages, isFocused]); 
+// FINE: LOGICA AGGIORNATA DEI TIMER E METRONOMO
 
 
   useEffect(() => {
@@ -558,6 +630,28 @@ const ABCDMetronome = () => {
     }
   }, [volume]);
   
+  // Gestione timer pausa inter-fase
+useEffect(() => {
+  if (isRunning && !isPaused && isInInterPhasePause) {
+    const pauseInterval = setInterval(() => {
+      setInterPhasePauseRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(pauseInterval);
+          setTimeout(() => {
+            setIsInInterPhasePause(false);
+            const currentIndex = phaseOrder.indexOf(currentPhase);
+            const nextPhase = phaseOrder[currentIndex + 1];
+            startBreak(nextPhase);
+          }, 100);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(pauseInterval);
+  }
+}, [isRunning, isPaused, isInInterPhasePause, currentPhase]);
   // ** EFFECT PER CATTURARE LE DIMENSIONI (mantenuto il fix) **
   useEffect(() => {
     if (!isInBreak && metronomeContentRef.current) {
@@ -578,20 +672,34 @@ const ABCDMetronome = () => {
   // ** FINE EFFECT **
 
   const handleStartStop = () => {
-    if (isRunning) {
-      setIsPaused(!isPaused);
-      setIsFocused(false); // FORZA L'USCITA dal Focus se si pausa
-    } else {
-      ensureAudioContext();
-      resumeAudioContext();
-      setTotalTimeRemaining(calculateTotalTime(phaseDurations));
-      setIsRunning(true);
-      setIsPaused(false);
-      setIsFocused(false); // Resetta Focus
-      // FIX: Al primo start, parte il break che farà iniziare la fase 'A'
-      startBreak('A'); 
+  // Impedisci pausa/riprendi durante il countdown
+  if (isInBreak && countdownTimeoutsRef.current.length > 0) {
+    return; // Non fare nulla se siamo nel countdown
+  }
+  
+  if (isRunning) {
+    setIsPaused(!isPaused);
+    setIsFocused(false);
+    
+    if (!isPaused && isInBreak) {
+      breakStartedRef.current = false;
     }
-  };
+  } else {
+    ensureAudioContext();
+    resumeAudioContext();
+    setIsPaused(false);
+    setIsFocused(false);
+    setIsInInterPhasePause(false);
+    setTotalTimeRemaining(calculateTotalTime(phaseDurations));
+    
+    setIsInBreak(true);
+    setIsRunning(true);
+    
+    setTimeout(() => {
+      startBreak('A');
+    }, 50);
+  }
+};
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === ' ') {
@@ -615,18 +723,25 @@ const ABCDMetronome = () => {
   }, [isRunning, isPaused, isInBreak, phaseDurations]);
 
   const handleReset = () => {
-    setIsRunning(false);
-    setIsPaused(false);
-    setIsFocused(false); // Resetta Focus
-    setCurrentPhase('A');
-    setTimeRemaining(phaseDurations['A'] * 60);
-    setTotalTimeRemaining(calculateTotalTime(phaseDurations));
-    setIsInBreak(false);
-    nextPhaseOnBreakEndRef.current = 'A'; // Resetta anche il riferimento
-    stopMetronome();
-    countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
-    countdownTimeoutsRef.current = [];
-  };
+  // Ferma tutto
+  stopMetronome();
+  countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+  countdownTimeoutsRef.current = [];
+  if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+  if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+  
+  // Reset completo di tutti gli stati
+  setIsRunning(false);
+  setIsPaused(false);
+  setIsFocused(false);
+  setIsInBreak(false);
+  setIsInInterPhasePause(false);
+  setCountdownBeat(0);
+  setCurrentPhase('A');
+  setTimeRemaining(phaseDurations['A'] * 60);
+  setTotalTimeRemaining(calculateTotalTime(phaseDurations));
+  nextPhaseOnBreakEndRef.current = 'A';
+};
 
   const handleResetDefaults = () => {
     if (isRunning && !isPaused) return; 
@@ -638,6 +753,9 @@ const ABCDMetronome = () => {
     setTotalTimeRemaining(calculateTotalTime(defaultPhaseDurations));
     setTimeRemaining(defaultPhaseDurations['A'] * 60);
     nextPhaseOnBreakEndRef.current = 'A';
+    setIsInBreak(false);
+  setIsInInterPhasePause(false);
+  setCountdownBeat(0);
   };
 
   const formatTime = (seconds: number) => {
@@ -702,13 +820,13 @@ const ABCDMetronome = () => {
 };
 
   return (
-<div className="relative min-h-screen overflow-hidden max-w-full w-full bg-[#0b0d0e] text-white flex justify-center">
+<div className="relative min-h-screen overflow-hidden overflow-x-hidden max-w-full w-full bg-[#0b0d0e] text-white flex justify-center">
 
 
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
       <div className="pointer-events-none absolute -bottom-32 left-[12%] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,_rgba(96,129,118,0.18),_transparent_68%)] blur-3xl" />
       <div className="pointer-events-none absolute -top-48 right-[-10%] h-[620px] w-[620px] rounded-full bg-[radial-gradient(circle,_rgba(71,85,105,0.16),_transparent_70%)] blur-3xl" />
-<div className="relative z-10 mx-auto w-full max-w-[95%] sm:max-w-6xl px-6 sm:px-8 pb-16 pt-10 scale-[0.88] origin-top sm:scale-100 sm:w-full sm:origin-center">
+<div className="relative z-10 mx-auto w-full max-w-full sm:max-w-6xl px-8 sm:px-8 pb-8 pt-0 sm:pb-16 sm:pt-10 scale-[0.88] origin-center sm:scale-100">
 
         <motion.header
           variants={fadeUp}
@@ -716,7 +834,7 @@ const ABCDMetronome = () => {
           animate="visible"
           className="flex flex-col gap-5 text-center lg:text-left"
         >
-          <h1 className="text-4xl font-light leading-tight text-neutral-100 sm:text-5xl lg:text-[3.35rem]">
+          <h1 className="text-5xl font-light leading-tight text-neutral-100 sm:text-5xl lg:text-5xl xl:text-[3.35rem]">
             <span className="font-semibold text-[#88a7d0]">A</span>
             <span className="font-semibold text-[#c2b68a]">B</span>
             <span className="font-semibold text-[#d9a88a]">C</span>
@@ -745,13 +863,13 @@ const ABCDMetronome = () => {
 
         {/* CONTENITORE PRINCIPALE (GESTISCE L'ORDINE MOBILE E IL LAYOUT DESKTOP COMPATTO) */}
         <motion.div
-            className="mt-14 flex flex-col gap-8 lg:flex-row lg:justify-between" 
-            variants={staggerParent}
-            initial="hidden"
-            animate="visible"
-        >
+    className="mt-14 flex flex-col gap-8 items-center lg:flex-row lg:justify-between lg:items-start" 
+    variants={staggerParent}
+    initial="hidden"
+    animate="visible"
+>
             {/* COLONNA DI SINISTRA (lg:w-7/12 - Metronomo, Controlli) */}
-            <div className="flex flex-col gap-8 lg:w-7/12"> 
+            <div className="flex flex-col gap-8 w-full max-w-2xl lg:max-w-none lg:w-7/12"> 
                 
                 {/* 1. SEZIONE METRONOMO: order-1 (Mobile/Desktop) */}
                 <motion.section
@@ -790,34 +908,57 @@ const ABCDMetronome = () => {
                         {/* FIX: Wrapper Relative per stabilizzare le dimensioni */}
                         <div className="relative" style={contentDimensions ?? {}}>
                             <AnimatePresence mode="wait">
-                                {isInBreak ? (
-                                <motion.div
-                                    key="break"
-                                    initial={{ opacity: 0, y: 30 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -20 }}
-                                    transition={{ duration: 0.65, ease: 'easeOut' }}
-                                    // Utilizza absolute inset-0 per riempire lo spazio fissato dal genitore
-                                    className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur w-full flex flex-col justify-center absolute inset-0"
-                                >
-                                    <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">
-                                        {/* Il nome della fase successiva è in nextPhaseOnBreakEndRef */}
-                                        Preparazione per la sezione {nextPhaseOnBreakEndRef.current}
-                                    </span>
-                                    <div className="mt-6 text-[5.5rem] font-bold text-[#8ab7aa]">
-                                    {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
-                                    </div>
-                                    <p className="text-neutral-400">
-                                    {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
-                                    </p>
-                                </motion.div>
-                                ) : (
-                                <motion.div 
-                                    key="active" 
-                                    className="w-full" 
-                                    ref={metronomeContentRef} // Aggiunge il ref per la misurazione
-                                > 
-                                    <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
+  {isInInterPhasePause ? (
+    <motion.div
+      key="inter-pause"
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.65, ease: 'easeOut' }}
+      className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur w-full flex flex-col justify-center absolute inset-0"
+    >
+      <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">
+        Pausa tra le sezioni
+      </span>
+      <motion.div 
+  key={interPhasePauseRemaining}
+  initial={{ scale: 1.3, opacity: 0 }}
+  animate={{ scale: 1, opacity: 1 }}
+  transition={{ duration: 0.3, ease: "easeOut" }}
+  className="mt-6 text-[5.5rem] font-bold text-amber-400 tabular-nums"
+>
+  {interPhasePauseRemaining > 0 ? interPhasePauseRemaining : '...'}
+</motion.div>
+      <p className="text-neutral-400">
+        Preparati per la sezione successiva...
+      </p>
+    </motion.div>
+  ) : isInBreak ? (
+    <motion.div
+      key="break"
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.65, ease: 'easeOut' }}
+      className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur w-full flex flex-col justify-center absolute inset-0"
+    >
+      <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">
+        Preparazione per la sezione {nextPhaseOnBreakEndRef.current}
+      </span>
+      <div className="mt-6 text-[5.5rem] font-bold text-[#8ab7aa]">
+        {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
+      </div>
+      <p className="text-neutral-400">
+        {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
+      </p>
+    </motion.div>
+  ) : (
+    <motion.div 
+      key="active" 
+      className="w-full" 
+      ref={metronomeContentRef}
+    > 
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
                                     <div className="relative mx-auto flex h-52 w-52 sm:h-64 sm:w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
                                         <div
                                         className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
@@ -928,21 +1069,21 @@ const ABCDMetronome = () => {
 
                     {/* Pulsante Play/Pausa */}
                     <button
-                        onClick={handleStartStop}
-                        // Non disabilitare per isFocused, Play/Pause ferma tutto
-                        className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
-                        isRunning && !isPaused
-                            ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
-                            : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
-                        }`}
-                    >
-                        {/* LOGICA ICONA CORRETTA */}
-                        {isRunning && !isPaused 
-                            ? <Pause size={24} className="relative" /> 
-                            : <Play size={24} className="relative" />}
-                        {/* LOGICA TESTO */}
-                        <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
-                    </button>
+  onClick={handleStartStop}
+  disabled={isInBreak && countdownTimeoutsRef.current.length > 0} // ← AGGIUNGI questa riga
+  className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
+    isRunning && !isPaused
+      ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
+      : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
+  } ${isInBreak && countdownTimeoutsRef.current.length > 0 ? 'opacity-40 cursor-not-allowed' : ''}`} // ← AGGIUNGI questa classe condizionale
+>
+  {/* LOGICA ICONA CORRETTA */}
+  {isRunning && !isPaused 
+    ? <Pause size={24} className="relative" /> 
+    : <Play size={24} className="relative" />}
+  {/* LOGICA TESTO */}
+  <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
+</button>
                     
                     {/* AGGIUNTO: Pulsante FOCUS/FREEZE */}
                     <button
@@ -989,7 +1130,7 @@ const ABCDMetronome = () => {
             </div>
             
             {/* COLONNA DI DESTRA (lg:w-5/12 - Tempo, Overview, Settings, Info) */}
-            <div className="flex flex-col gap-8 lg:w-5/12"> 
+            <div className="flex flex-col gap-8 w-full max-w-2xl lg:max-w-none lg:w-5/12"> 
                 
                 {/* 2. TEMPO COMPLESSIVO: order-3 (Mobile) / lg:order-1 (Desktop) */}
                 <motion.div
@@ -998,9 +1139,13 @@ const ABCDMetronome = () => {
                 >
                     <div className="flex items-center justify-between">
                     <div>
-                        <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
-                        <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
-                    </div>
+  <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
+  {isInInterPhasePause ? (
+    <div className="mt-2 text-3xl font-semibold text-amber-400 tracking-wider">PAUSA</div>
+  ) : (
+    <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
+  )}
+</div>
                     {/* Formattazione del tempo su due righe */}
                     <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-center">
                         <span style={{ color: phaseStyles[currentPhase].accent, fontWeight: 'bold' }}>
