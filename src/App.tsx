@@ -87,6 +87,8 @@ website: 'www.batterista.online',
     goToWebsite: 'Vai al sito Batterista Online',
     copyright: 'Copyright © Batterista Online - Tutti i diritti riservati -',
     version: 'ABCD method versione 1.7',
+    supportApp: 'Aiutami a mantenere questa Applicazione sempre gratuita:',
+buyMeCoffee: 'offrimi un caffè',
     audioNotSupported: 'Audio non supportato dal browser; il timer funzionerà senza suoni.',
     audioFailed: "Impossibile inizializzare l'audio. Consenti l'accesso o ricarica la pagina.",
     audioEnable: "Per abilitare i suoni interagisci con la pagina (es. premi Start) e consenti l'audio.",
@@ -157,6 +159,8 @@ website: 'www.batterista.online',
     goToWebsite: 'Go to Batterista Online website',
     copyright: 'Copyright © Batterista Online - All rights reserved -',
     version: 'ABCD method version 1.7',
+    supportApp: 'Help me keep this App always free:',
+buyMeCoffee: 'buy me a coffee',
     audioNotSupported: 'Audio not supported by browser; the timer will work without sounds.',
     audioFailed: "Unable to initialize audio. Allow access or reload the page.",
     audioEnable: "To enable sounds interact with the page (e.g. press Start) and allow audio.",
@@ -1614,15 +1618,28 @@ useEffect(() => {
         </motion.div>
 
         <motion.footer
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="mt-16 flex flex-col gap-2 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-600 lg:flex-row lg:items-center lg:justify-between"
-        >
-          <span>{t.copyright} {t.allRightsReserved} - <a 
-        href="https://batterista.online">www.batterista.online</a></span>
-          <span className="text-neutral-500">{t.version}</span>
-        </motion.footer>
+  variants={fadeUp}
+  initial="hidden"
+  animate="visible"
+  className="mt-16 flex flex-col gap-4 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-600"
+>
+  <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+    <span>{t.copyright} {t.allRightsReserved} - <a href="https://batterista.online" className="hover:text-neutral-400 transition">{t.website}</a></span>
+    <span className="text-neutral-500">{t.version}</span>
+  </div>
+  
+  <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-neutral-500 pt-4 border-t border-white/10">
+    <span>{t.supportApp}</span>
+    <a 
+      href="https://www.buymeacoffee.com/batterista" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-xs font-semibold normal-case tracking-normal text-amber-300 transition hover:border-amber-400/40 hover:bg-amber-500/20 hover:text-amber-200"
+    >
+      ☕ {t.buyMeCoffee}
+    </a>
+  </div>
+</motion.footer>
       </div>
     </div>
   );

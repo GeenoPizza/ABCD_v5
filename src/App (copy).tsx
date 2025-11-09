@@ -20,12 +20,160 @@ type PhasePercentages = Record<PhaseKey, number>;
 
 const phaseOrder: PhaseKey[] = ['A', 'B', 'C', 'D'];
 const INTER_PHASE_PAUSE_SECONDS = 5;
-const phaseStyles: Record<PhaseKey, PhaseStyle> = {
-  A: { name: 'Attenzione', color: 'from-[#4d6bb3] to-[#345997]', textColor: 'text-[#98b5f5]', accent: '#5f8dff', globalBarColor: '#537abf' }, 
-  B: { name: 'Base', color: 'from-[#d8a343] to-[#b9852c]', textColor: 'text-[#f4d48a]', accent: '#f1b54f', globalBarColor: '#d6a855' }, 
-  C: { name: 'Challenge', color: 'from-[#d46c4a] to-[#b55133]', textColor: 'text-[#ffb08a]', accent: '#ff865c', globalBarColor: '#e07659' }, 
-  D: { name: 'Destinazione', color: 'from-[#3a9d7a] to-[#2a7c5f]', textColor: 'text-[#9de7c6]', accent: '#5dda9d', globalBarColor: '#47b089' } 
+
+const translations = {
+  it: {
+    attention: 'Attenzione',
+    base: 'Base',
+    challenge: 'Challenge',
+    destination: 'Destinazione',
+    producedBy: 'prodotto da',
+    preparationFor: 'Preparazione per la sezione',
+    oneTwoText: 'One... Two...',
+    readyGoText: 'One, Two, Ready, Go!',
+    currentSection: 'Sezione attuale',
+    targetBpm: 'Target',
+    duration: 'Durata',
+    minutes: 'min',
+    totalTime: 'Tempo totale',
+    ofTargetSpeed: 'della velocità target',
+    focusActive: 'FOCUS ATTIVO • TIMER FREEZE',
+    sectionProgress: 'Progressione sezione',
+    pauseBetweenSections: 'Pausa tra le sezioni',
+    prepareNext: 'Preparati per la sezione successiva...',
+    controls: 'Controlli',
+    producedByLink: 'Batterista Online',
+goToSite: 'Vai al sito Batterista Online',
+allRightsReserved: 'Tutti i diritti riservati',
+website: 'www.batterista.online',
+    live: 'live',
+    pause: 'Pausa',
+    start: 'Start',
+    resetTooltip: 'Reset (ricomincia da A)',
+    repeatTooltip: 'Ripeti la sezione',
+    focusTooltip: 'Attiva Focus (Ferma Timer Sezione)',
+    resumeTooltip: 'Riprendi Timer (Focus Attivo)',
+    nextTooltip: 'Sezione successiva',
+    overallTime: 'Tempo complessivo',
+    sectionLabel: 'Sezione',
+    overviewSections: 'Overview Sezioni',
+    overview: 'overview',
+    settings: 'Settings',
+    bpmTarget: 'BPM Target',
+    subdivision: 'Suddivisione',
+    sectionDuration: 'Durata sezioni (minuti)',
+    speedPercentages: 'Percentuali velocità',
+    fixedAt100: 'Fissata a 100% per mantenere il target definitivo.',
+    expectedBpm: 'BPM previsti',
+    resetDefaults: 'Ripristina Defaults',
+    cannotModify: 'Impossibile modificare le impostazioni durante la riproduzione',
+    allChanges: 'Tutte le modifiche (BPM, durate, percentuali) verranno riportate ai valori iniziali.',
+    previewUpdated: 'Preview BPM per sezione aggiornata in tempo reale',
+    infoInstructions: 'Info & Istruzioni',
+    methodTitle: 'ABCD method = Attenzione, Base, Challenge, Destinazione.',
+    methodDesc: 'Un metodo semplice per studiare in modo più efficace, anche solo 12 minuti al giorno. Ogni sessione ti fa passare da lentezza e precisione, fino alla velocità target, in modo logico e progressivo. È lo stesso principio dell\'allenamento sportivo: alternare concentrazione, sforzo e recupero per costruire stabilità.',
+    howItWorks: 'Funzionamento',
+    howItWorksDesc: 'Quando premi Play, il metronomo suonerà per i minuti impostati alla velocità della sezione attiva. Alla fine di ogni fase sentirai un countdown e il timer passerà automaticamente alla sezione successiva. Di default, ogni sezione dura 3 minuti con le velocità: A 70%, B 85%, C 105%, D 100%.',
+    defaultStructure: 'Struttura Default',
+    defaultStructureDesc: '4 fasi da 3 minuti ciascuna:',
+    phaseA: 'controllo e meccanica',
+    phaseB: 'stabilità e suono',
+    phaseC: 'sfida e resistenza',
+    phaseD: 'naturalezza e obiettivo',
+    focusControl: 'Controllo Focus (Novità)',
+    focusControlDesc: 'Il pulsante Focus ti permette di mettere in pausa il timer della fase corrente. Il metronomo continuerà a suonare al BPM attuale, permettendoti di esercitarti finché non sei pronto a ripartire. Premi di nuovo il pulsante per far riprendere il timer da dove si era interrotto.',
+    customization: 'Personalizzazione',
+    customizationDesc: 'Puoi modificare durate e velocità come vuoi cliccando la sezione "Settings": qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perché è ovviamente pari al 100%).',
+    goToWebsite: 'Vai al sito Batterista Online',
+    copyright: 'Copyright © Batterista Online - Tutti i diritti riservati -',
+    version: 'ABCD method versione 1.7',
+    supportApp: 'Aiutami a mantenere questa Applicazione sempre gratuita:',
+buyMeCoffee: 'offrimi un caffè',
+    audioNotSupported: 'Audio non supportato dal browser; il timer funzionerà senza suoni.',
+    audioFailed: "Impossibile inizializzare l'audio. Consenti l'accesso o ricarica la pagina.",
+    audioEnable: "Per abilitare i suoni interagisci con la pagina (es. premi Start) e consenti l'audio.",
+    pauseLabel: 'PAUSA'
+  },
+  en: {
+    attention: 'Attention',
+    base: 'Base',
+    challenge: 'Challenge',
+    destination: 'Destination',
+    producedBy: 'produced by',
+    preparationFor: 'Get ready for section',
+    oneTwoText: 'One... Two...',
+    readyGoText: 'One, Two, Ready, Go!',
+    currentSection: 'Current Section',
+    targetBpm: 'Target',
+    duration: 'Duration',
+    minutes: 'min',
+    totalTime: 'Total Time',
+    ofTargetSpeed: 'of target speed',
+    focusActive: 'FOCUS ACTIVE • TIMER FREEZE',
+    sectionProgress: 'Section Progress',
+    pauseBetweenSections: 'Pause between sections',
+    prepareNext: 'Get ready for the next section...',
+    controls: 'Controls',
+    producedByLink: 'Batterista Online',
+goToSite: 'Go to Batterista Online website',
+allRightsReserved: 'All rights reserved',
+website: 'www.batterista.online',
+    live: 'live',
+    pause: 'Pause',
+    start: 'Start',
+    resetTooltip: 'Reset (restart from A)',
+    repeatTooltip: 'Repeat section',
+    focusTooltip: 'Activate Focus (Freeze Section Timer)',
+    resumeTooltip: 'Resume Timer (Focus Active)',
+    nextTooltip: 'Next section',
+    overallTime: 'Overall Time',
+    sectionLabel: 'Section',
+    overviewSections: 'Sections Overview',
+    overview: 'overview',
+    settings: 'Settings',
+    bpmTarget: 'Target BPM',
+    subdivision: 'Subdivision',
+    sectionDuration: 'Section Duration (minutes)',
+    speedPercentages: 'Speed Percentages',
+    fixedAt100: 'Fixed at 100% to maintain the final target.',
+    expectedBpm: 'Expected BPM',
+    resetDefaults: 'Reset Defaults',
+    cannotModify: 'Cannot modify settings while playing',
+    allChanges: 'All changes (BPM, durations, percentages) will be reset to initial values.',
+    previewUpdated: 'BPM preview per section updated in real time',
+    infoInstructions: 'Info & Instructions',
+    methodTitle: 'ABCD method = Attention, Base, Challenge, Destination.',
+    methodDesc: 'A simple method to study more effectively, even just 12 minutes a day. Each session takes you from slowness and precision to target speed in a logical and progressive way. It\'s the same principle as sports training: alternating concentration, effort and recovery to build stability.',
+    howItWorks: 'How It Works',
+    howItWorksDesc: 'When you press Play, the metronome will sound for the set minutes at the speed of the active section. At the end of each phase you will hear a countdown and the timer will automatically move to the next section. By default, each section lasts 3 minutes with speeds: A 70%, B 85%, C 105%, D 100%.',
+    defaultStructure: 'Default Structure',
+    defaultStructureDesc: '4 phases of 3 minutes each:',
+    phaseA: 'control and mechanics',
+    phaseB: 'stability and sound',
+    phaseC: 'challenge and endurance',
+    phaseD: 'naturalness and goal',
+    focusControl: 'Focus Control (New)',
+    focusControlDesc: 'The Focus button allows you to pause the current phase timer. The metronome will continue to play at the current BPM, allowing you to practice until you\'re ready to restart. Press the button again to resume the timer from where it stopped.',
+    customization: 'Customization',
+    customizationDesc: 'You can modify durations and speeds as you like by clicking the "Settings" section: here you can set the target BPM (the one you want to reach), the duration of each section (from 1 to 5 minutes) and the BPM percentage for each section based on the Target BPM (the percentage of section D (Destination) is not modifiable because it is obviously equal to 100%).',
+    goToWebsite: 'Go to Batterista Online website',
+    copyright: 'Copyright © Batterista Online - All rights reserved -',
+    version: 'ABCD method version 1.7',
+    supportApp: 'Help me keep this App always free:',
+buyMeCoffee: 'buy me a coffee',
+    audioNotSupported: 'Audio not supported by browser; the timer will work without sounds.',
+    audioFailed: "Unable to initialize audio. Allow access or reload the page.",
+    audioEnable: "To enable sounds interact with the page (e.g. press Start) and allow audio.",
+    pauseLabel: 'PAUSE'
+  }
 };
+
+const getPhaseStyles = (lang: 'it' | 'en'): Record<PhaseKey, PhaseStyle> => ({
+  A: { name: translations[lang].attention, color: 'from-[#4d6bb3] to-[#345997]', textColor: 'text-[#98b5f5]', accent: '#5f8dff', globalBarColor: '#537abf' }, 
+  B: { name: translations[lang].base, color: 'from-[#d8a343] to-[#b9852c]', textColor: 'text-[#f4d48a]', accent: '#f1b54f', globalBarColor: '#d6a855' }, 
+  C: { name: translations[lang].challenge, color: 'from-[#d46c4a] to-[#b55133]', textColor: 'text-[#ffb08a]', accent: '#ff865c', globalBarColor: '#e07659' }, 
+  D: { name: translations[lang].destination, color: 'from-[#3a9d7a] to-[#2a7c5f]', textColor: 'text-[#9de7c6]', accent: '#5dda9d', globalBarColor: '#47b089' } 
+});
 
 const defaultPhaseDurations: PhaseDurations = {
   A: 3,
@@ -101,6 +249,9 @@ const ABCDMetronome = () => {
   const [beatFlash, setBeatFlash] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [volume, setVolume] = useState(0.85);
+  const [language, setLanguage] = useState<'it' | 'en'>('it');
+  const t = translations[language];
+  const phaseStyles = getPhaseStyles(language);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
@@ -147,7 +298,7 @@ const interPauseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
 
     if (!AudioContextClass) {
-      setAudioError(prev => prev ?? 'Audio non supportato dal browser; il timer funzionerà senza suoni.');
+      setAudioError(prev => prev ?? translations[language].audioNotSupported);
       audioContextRef.current = null;
       return false;
     }
@@ -163,7 +314,7 @@ const interPauseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null
       return true;
     } catch (error) {
       console.error('AudioContext initialization failed', error);
-      setAudioError(prev => prev ?? "Impossibile inizializzare l'audio. Consenti l'accesso o ricarica la pagina.");
+      setAudioError(prev => prev ?? translations[language].audioFailed);
       audioContextRef.current = null;
       return false;
     }
@@ -177,7 +328,7 @@ const interPauseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null
         .then(() => setAudioError(null))
         .catch(error => {
           console.error('AudioContext resume failed', error);
-          setAudioError("Per abilitare i suoni interagisci con la pagina (es. premi Start) e consenti l'audio.");
+          setAudioError(translations[language].audioEnable);
         });
     }
   };
@@ -842,8 +993,26 @@ useEffect(() => {
             <span className="pl-2 font-light text-neutral-300">method</span>
           </h1>
           <p className="max-w-xl text-sm text-neutral-500 lg:text-base">
-            prodotto da <a href="https://batterista.online">Batterista Online</a>
+            {t.producedBy} <a href="https://batterista.online">Batterista Online</a>
           </p>
+          <div className="mt-3 flex w-full items-center justify-end gap-3">
+  <a
+    href="https://batterista.online"
+    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-neutral-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+  >
+    ⟵ Home
+  </a>
+
+  <button
+    onClick={() => setLanguage(prev => prev === 'it' ? 'en' : 'it')}
+    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-neutral-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+  >
+    {language === 'it' ? '🇬🇧 English' : '🇮🇹 Italiano'}
+  </button>
+</div>
+
+
+
         </motion.header>
         
         <motion.div 
@@ -918,8 +1087,8 @@ useEffect(() => {
       className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur w-full flex flex-col justify-center absolute inset-0"
     >
       <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">
-        Pausa tra le sezioni
-      </span>
+  {t.pauseBetweenSections}
+</span>
       <motion.div 
   key={interPhasePauseRemaining}
   initial={{ scale: 1.3, opacity: 0 }}
@@ -930,7 +1099,7 @@ useEffect(() => {
   {interPhasePauseRemaining > 0 ? interPhasePauseRemaining : '...'}
 </motion.div>
       <p className="text-neutral-400">
-        Preparati per la sezione successiva...
+{t.prepareNext}
       </p>
     </motion.div>
   ) : isInBreak ? (
@@ -943,13 +1112,13 @@ useEffect(() => {
       className="rounded-[24px] border border-white/10 bg-white/5 px-10 py-16 text-center shadow-inner backdrop-blur w-full flex flex-col justify-center absolute inset-0"
     >
       <span className="text-xs uppercase tracking-[0.36em] text-neutral-500">
-        Preparazione per la sezione {nextPhaseOnBreakEndRef.current}
+        {t.preparationFor} {nextPhaseOnBreakEndRef.current}
       </span>
       <div className="mt-6 text-[5.5rem] font-bold text-[#8ab7aa]">
         {countdownBeat > 0 ? (countdownBeat <= 2 ? countdownBeat : countdownBeat - 2) : '...'}
       </div>
       <p className="text-neutral-400">
-        {countdownBeat <= 2 ? 'One... Two...' : 'One, Two, Ready, Go!'}
+        {countdownBeat <= 2 ? t.oneTwoText : t.readyGoText}
       </p>
     </motion.div>
   ) : (
@@ -977,34 +1146,34 @@ useEffect(() => {
 
                                     <div className="space-y-6 text-left">
                                         <div>
-                                        <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">Sezione attuale</span>
+                                        <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">{t.currentSection}</span>
                                         <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
                                             {currentPhase} • {phaseStyles[currentPhase].name}
                                         </h2>
                                         <p className="mt-2 text-sm text-neutral-400">
-                                            {subdivisions[subdivision].name} • Target {targetBPM} BPM • Durata {phaseDurations[currentPhase]} min
+                                            {subdivisions[subdivision].name} • {t.targetBpm} {targetBPM} BPM • {t.duration} {phaseDurations[currentPhase]} {t.minutes}
                                         </p>
                                         </div>
 
                                         <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
                                         <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                                            Tempo totale • {formatTime(totalTimeRemaining)}
+                                            {t.totalTime} • {formatTime(totalTimeRemaining)}
                                         </span>
                                         <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
-                                            {phasePercentages[currentPhase]}% della velocità target
+                                            {phasePercentages[currentPhase]}% {t.ofTargetSpeed}
                                         </span>
                                         </div>
                                         
                                         {/* AGGIUNTO: Indicatore Focus Attivo */}
                                         {isFocused && (
                                             <div className="inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.35em] text-yellow-300">
-                                                <Target size={14} /> FOCUS ATTIVO • TIMER FREEZE
+                                                <Target size={14} /> {t.focusActive}
                                             </div>
                                         )}
 
                                         <div>
                                         <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                                            <span>Progressione sezione</span>
+                                            <span>{t.sectionProgress}</span>
                                             {/* AGGIUNTO: Logica avviso visivo 10 secondi */}
                                             <span 
                                                 className={isTimeWarning ? 'text-red-400 font-bold' : 'text-neutral-500'}
@@ -1043,7 +1212,7 @@ useEffect(() => {
     <button
         onClick={handleReset}
         className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
-        title="Reset (ricomincia da A)"
+        title={t.resetTooltip}
         // Applica il glow ABCD in modo permanente
         style={{ 
             boxShadow: getGlobalResetGlow(),
@@ -1059,7 +1228,7 @@ useEffect(() => {
                         onClick={handleRestartPhase}
                         disabled={!isRunning || isInBreak || isFocused} // AGGIUNTO: Disabilita se in Focus
                         className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        title={`Ripeti la sezione ${currentPhase}`}
+                        title={`${t.repeatTooltip} ${currentPhase}`}
                         // Applicazione condizionale del glow
                         style={{ boxShadow: isRunning && !isInBreak && !isFocused ? `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.45)}` : 'none', transition: 'box-shadow 0.3s ease-in-out' }}
                     >
@@ -1082,7 +1251,7 @@ useEffect(() => {
     ? <Pause size={24} className="relative" /> 
     : <Play size={24} className="relative" />}
   {/* LOGICA TESTO */}
-  <span className="relative">{isRunning && !isPaused ? 'Pausa' : isPaused ? 'Riprendi' : 'Start'}</span>
+  <span className="relative">{isRunning && !isPaused ? t.pause : isPaused ? t.start : t.start}</span>
 </button>
                     
                     {/* AGGIUNTO: Pulsante FOCUS/FREEZE */}
@@ -1094,7 +1263,7 @@ useEffect(() => {
                             ? `border-yellow-500/40 bg-yellow-500/10 text-yellow-300 shadow-[0_0_25px_rgba(252,211,77,0.4)]`
                             : 'border-white/10 bg-white/5 text-neutral-300 hover:border-white/30 hover:text-white'
                         } disabled:cursor-not-allowed disabled:opacity-40`}
-                        title={isFocused ? "Riprendi Timer (Focus Attivo)" : "Attiva Focus (Ferma Timer Sezione)"}
+                        title={isFocused ? t.resumeTooltip : t.focusTooltip}
                     >
                         <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
                         <Target size={22} className="relative" />
@@ -1105,7 +1274,7 @@ useEffect(() => {
                         onClick={() => goToNextPhase(true)}
                         disabled={!isRunning || isInBreak || currentPhase === 'D' || isFocused} // AGGIUNTO: Disabilita se in Focus
                         className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        title="Sezione successiva"
+                        title={t.nextTooltip}
                     >
                         <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
                         <SkipForward size={22} className="relative" />
@@ -1139,9 +1308,9 @@ useEffect(() => {
                 >
                     <div className="flex items-center justify-between">
                     <div>
-  <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Tempo complessivo</span>
+  <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">{t.overallTime}</span>
   {isInInterPhasePause ? (
-    <div className="mt-2 text-3xl font-semibold text-amber-400 tracking-wider">PAUSA</div>
+    <div className="mt-2 text-3xl font-semibold text-amber-400 tracking-wider">{t.pauseLabel}</div>
   ) : (
     <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
   )}
@@ -1149,10 +1318,10 @@ useEffect(() => {
                     {/* Formattazione del tempo su due righe */}
                     <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-center">
                         <span style={{ color: phaseStyles[currentPhase].accent, fontWeight: 'bold' }}>
-                            {`Sezione ${currentPhase}:`}
+                            {`${t.sectionLabel} ${currentPhase}:`}
                         </span>
                         <div className="text-neutral-400 mt-0.5 font-normal tracking-normal text-sm">
-                            {`${phaseDurations[currentPhase]} minuti`}
+                            {`${phaseDurations[currentPhase]} ${t.minutes}`}
                         </div>
                     </div>
                     </div>
@@ -1169,7 +1338,7 @@ useEffect(() => {
                     className="order-4 lg:order-2 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">Overview Sezioni</span> 
+                    <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">{t.overviewSections}</span> 
                     <span className="text-[10px] uppercase tracking-[0.35em] text-neutral-600">overview</span>
                     </div>
                     <div className="space-y-5">
@@ -1180,7 +1349,7 @@ useEffect(() => {
                             <span className="text-neutral-400">{Math.round(targetBPM * getPhasePercentage(key))} BPM</span>
                         </div>
                         <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                            <span>{phaseDurations[key]} min</span>
+                            <span>{phaseDurations[key]} {t.minutes}</span>
                             <span>{phasePercentages[key]}%</span>
                         </div>
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5 relative">
@@ -1262,7 +1431,7 @@ useEffect(() => {
                         </div>
 
                         <div>
-                            <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Suddivisione</label>
+                            <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">{t.subdivision}</label>
                             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                             {Object.entries(subdivisions).map(([key, value]) => (
                                 <button
@@ -1282,7 +1451,7 @@ useEffect(() => {
                         </div>
 
                         <div>
-                            <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Durata sezioni (minuti)</label>
+                            <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">{t.sectionDuration}</label>
                             <div className="space-y-4">
                             {phaseOrder.map(key => (
                                 <div key={key}>
@@ -1311,7 +1480,7 @@ useEffect(() => {
                         </div>
 
                         <div>
-                            <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">Percentuali velocità</label>
+                            <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">{t.speedPercentages}</label>
                             <div className="grid gap-5 md:grid-cols-2">
                             {phaseOrder.map(key => (
                                 <div key={key} className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -1320,7 +1489,7 @@ useEffect(() => {
                                     <span>{phasePercentages[key]}%</span>
                                 </div>
                                 {key === 'D' ? (
-                                    <p className="text-[11px] text-neutral-500">Fissata a 100% per mantenere il target definitivo.</p>
+                                    <p className="text-[11px] text-neutral-500">{t.fixedAt100}</p>
                                 ) : (
                                     <input
                                     type="range"
@@ -1334,7 +1503,7 @@ useEffect(() => {
                                     />
                                 )}
                                 <div className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                                    {Math.round(targetBPM * getPhasePercentage(key))} BPM previsti
+                                    {Math.round(targetBPM * getPhasePercentage(key))} BPM
                                 </div>
                                 </div>
                             ))}
@@ -1350,15 +1519,15 @@ useEffect(() => {
                                 title="Ripristina durate e percentuali di default"
                             >
                                 <RefreshCcw size={16} className="text-neutral-500" />
-                                Ripristina Defaults
+                                {t.resetDefaults}
                             </button>
                             <div className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                                {isRunning && !isPaused ? 'Impossibile modificare le impostazioni durante la riproduzione' : 'Tutte le modifiche (BPM, durate, percentuali) verranno riportate ai valori iniziali.'}
-                            </div>
+  {isRunning && !isPaused ? t.cannotModify : t.allChanges}
+</div>
                         </div>
                         
                         <div className="border-t border-white/10 pt-5 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                            Preview BPM per sezione aggiornata in tempo reale
+                            {t.previewUpdated}
                         </div>
                         </motion.div>
                     )}
@@ -1377,7 +1546,7 @@ useEffect(() => {
                     }}
                     className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
                     >
-                    <span className="flex items-center gap-2"><Info size={16} /> Info & Istruzioni</span>
+                    <span className="flex items-center gap-2"><Info size={16} /> {t.infoInstructions}</span>
                     {showInstructions ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
 
@@ -1393,42 +1562,41 @@ useEffect(() => {
                         >
                         
                         <div className="space-y-3">
-                            <h4 className="text-lg font-semibold text-neutral-200">ABCD method = Attenzione, Base, Challenge, Destinazione.</h4>
+                            <h4 className="text-lg font-semibold text-neutral-200">{t.methodTitle}</h4>
                             <p className="text-base text-neutral-400">
-                            Un metodo semplice per studiare in modo più efficace, anche solo 12 minuti al giorno. Ogni sessione ti fa passare da lentezza e precisione, fino alla velocità target, in modo logico e progressivo. È lo stesso principio dell’allenamento sportivo: alternare concentrazione, sforzo e recupero per costruire stabilità.
+                            {t.methodDesc}
                             </p>
                         </div>
                         
                         <div className="border-t border-white/10 pt-4 space-y-3">
-                            <h4 className="text-lg font-semibold text-neutral-200">Funzionamento</h4>
+                            <h4 className="text-lg font-semibold text-neutral-200">{t.howItWorks}</h4>
                             <p className="text-base text-neutral-400">
-                            Quando premi Play, il metronomo suonerà per i minuti impostati alla velocità della sezione attiva. Alla fine di ogni fase sentirai un countdown e il timer passerà automaticamente alla sezione successiva.
-                            Di default, ogni sezione dura 3 minuti con le velocità: A 70%, B 85%, C 105%, D 100%.
+                            {t.howItWorksDesc}
                             </p>
                         </div>
 
                         <div className="border-t border-white/10 pt-4 space-y-3">
-                            <h4 className="text-lg font-semibold text-neutral-200">Struttura Default</h4>
-                            <p className="text-base text-neutral-400 mb-2">4 fasi da 3 minuti ciascuna:</p>
+                            <h4 className="text-lg font-semibold text-neutral-200">{t.defaultStructure}</h4>
+                            <p className="text-base text-neutral-400 mb-2">{t.defaultStructureDesc}</p>
                             <ul className="list-none space-y-1 pl-0 text-base text-neutral-400">
-                            <li><span className="font-semibold text-neutral-200">A – 70%</span> controllo e meccanica</li>
-                            <li><span className="font-semibold text-neutral-200">B – 85%</span> stabilità e suono</li>
-                            <li><span className="font-semibold text-neutral-200">C – 105%</span> sfida e resistenza</li>
-                            <li><span className="font-semibold text-neutral-200">D – 100%</span> naturalezza e obiettivo</li>
+                            <li><span className="font-semibold text-neutral-200">A – 70%</span> {t.phaseA}</li>
+                            <li><span className="font-semibold text-neutral-200">B – 85%</span> {t.phaseB}</li>
+                            <li><span className="font-semibold text-neutral-200">C – 105%</span> {t.phaseC}</li>
+                            <li><span className="font-semibold text-neutral-200">D – 100%</span> {t.phaseD}</li>
                             </ul>
                         </div>
                         
                         <div className="border-t border-white/10 pt-4 space-y-3">
-                            <h4 className="text-lg font-semibold text-neutral-200">Controllo Focus (Novità)</h4>
+                            <h4 className="text-lg font-semibold text-neutral-200">{t.focusControl}</h4>
                             <p className="text-base text-neutral-400">
-                            Il pulsante Focus ti permette di mettere in pausa il timer della fase corrente. Il metronomo continuerà a suonare al BPM attuale, permettendoti di esercitarti finché non sei pronto a ripartire. Premi di nuovo il pulsante per far riprendere il timer da dove si era interrotto.
+                            {t.focusControlDesc}
                             </p>
                         </div>
 
                         <div className="border-t border-white/10 pt-4 space-y-3">
-                            <h4 className="text-lg font-semibold text-neutral-200">Personalizzazione</h4>
+                            <h4 className="text-lg font-semibold text-neutral-200">{t.customization}</h4>
                             <p className="text-base text-neutral-400">
-                            Puoi modificare durate e velocità come vuoi cliccando la sezione "Settings": qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perchè è ovviamente pari al 100%).
+                           {t.customizationDesc}
                             </p>
                         </div>
                         <div className="mt-8 pt-4 border-t border-white/10 text-center">
@@ -1438,7 +1606,7 @@ useEffect(() => {
         rel="noopener noreferrer" 
         className="text-lg font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
     >
-        Vai al sito Batterista Online
+        {t.goToWebsite}
     </a>
 </div>
 
@@ -1450,15 +1618,28 @@ useEffect(() => {
         </motion.div>
 
         <motion.footer
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="mt-16 flex flex-col gap-2 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-600 lg:flex-row lg:items-center lg:justify-between"
-        >
-          <span>Copyright © Batterista Online - Tutti i diritti riservati - <a 
-        href="https://batterista.online">www.batterista.online</a></span>
-          <span className="text-neutral-500">ABCD method versione 1.7</span>
-        </motion.footer>
+  variants={fadeUp}
+  initial="hidden"
+  animate="visible"
+  className="mt-16 flex flex-col gap-4 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-600"
+>
+  <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+    <span>{t.copyright} {t.allRightsReserved} - <a href="https://batterista.online" className="hover:text-neutral-400 transition">{t.website}</a></span>
+    <span className="text-neutral-500">{t.version}</span>
+  </div>
+  
+  <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-neutral-500 pt-4 border-t border-white/10">
+    <span>{t.supportApp}</span>
+    <a 
+      href="https://www.buymeacoffee.com/batterista" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-xs font-semibold normal-case tracking-normal text-amber-300 transition hover:border-amber-400/40 hover:bg-amber-500/20 hover:text-amber-200"
+    >
+      ☕ {t.buyMeCoffee}
+    </a>
+  </div>
+</motion.footer>
       </div>
     </div>
   );
