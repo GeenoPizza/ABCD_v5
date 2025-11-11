@@ -1,4 +1,5 @@
-{ "name": "ABCD method",
+{
+  "name": "ABCD method",
   "short_name": "ABCD method",
   "description": "ABCD method - Batterista Online",
   "start_url": ".",
@@ -17,20 +18,20 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
   "screenshots": [
-  {
-    "src": "/screenshots/wide.png",
-    "sizes": "1280x720",
-    "type": "image/png",
-    "form_factor": "wide"
-  },
-  {
-    "src": "/screenshots/mobile.png",
-    "sizes": "720x1280",
-    "type": "image/png",
-    "form_factor": "narrow"
-  }
-]
-
+    {
+      "src": "/screenshots/wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/screenshots/mobile.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
 }
+
