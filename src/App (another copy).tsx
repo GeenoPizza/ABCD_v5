@@ -1241,7 +1241,7 @@ useEffect(() => {
                     <button
   onClick={handleStartStop}
   disabled={isInBreak && countdownTimeoutsRef.current.length > 0} // ← AGGIUNGI questa riga
-  className={`group relative flex flex-1 items-center justify-center gap-1 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
+  className={`group relative flex flex-1 items-center justify-center gap-0 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
     isRunning && !isPaused
       ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
       : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
@@ -1252,7 +1252,7 @@ useEffect(() => {
     ? <Pause size={18} className="relative" /> 
     : <Play size={18} className="relative" />}
   {/* LOGICA TESTO */}
-  <span className="relative mr-1">{isRunning && !isPaused ? t.pause : isPaused ? t.start : t.start}</span>
+  <span className="relative">{isRunning && !isPaused ? t.pause : isPaused ? t.start : t.start}</span>
 </button>
                     
                     {/* AGGIUNTO: Pulsante FOCUS/FREEZE */}
