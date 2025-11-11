@@ -1,7 +1,7 @@
 import { easeInOut } from "framer-motion";
 import { useState, useEffect, useRef, useMemo } from "react";
 // AGGIUNTA DI 'Target' per il pulsante Focus
-import { Play, Pause, SkipForward, RotateCcw, ChevronDown, ChevronUp, Plus, Minus, Volume2, Info, RefreshCcw, Target } from 'lucide-react'; 
+import { Play, Pause, SkipForward, RotateCcw, ChevronDown, ChevronUp, Plus, Minus, Volume2, Info, RefreshCcw, Target, Download } from 'lucide-react'; 
 import { motion, AnimatePresence } from 'framer-motion';
 
 type PhaseKey = 'A' | 'B' | 'C' | 'D';
@@ -89,6 +89,8 @@ website: 'www.batterista.online',
     version: 'ABCD method versione 1.7',
     supportApp: 'Aiutami a mantenere questa Applicazione sempre gratuita:',
 buyMeCoffee: 'offrimi un caffè',
+installApp: 'Installa ABCD come App',
+installPrompt: 'Installa questa app sul tuo dispositivo per un accesso rapido!',
     audioNotSupported: 'Audio non supportato dal browser; il timer funzionerà senza suoni.',
     audioFailed: "Impossibile inizializzare l'audio. Consenti l'accesso o ricarica la pagina.",
     audioEnable: "Per abilitare i suoni interagisci con la pagina (es. premi Start) e consenti l'audio.",
@@ -161,6 +163,8 @@ website: 'www.batterista.online',
     version: 'ABCD method version 1.7',
     supportApp: 'Help me keep this App always free:',
 buyMeCoffee: 'buy me a coffee',
+installApp: 'Install ABCD as App',
+installPrompt: 'Install this app on your device for quick access!',
     audioNotSupported: 'Audio not supported by browser; the timer will work without sounds.',
     audioFailed: "Unable to initialize audio. Allow access or reload the page.",
     audioEnable: "To enable sounds interact with the page (e.g. press Start) and allow audio.",
@@ -273,7 +277,8 @@ const interPauseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null
   const metronomeContentRef = useRef<HTMLDivElement>(null);
   const [contentDimensions, setContentDimensions] = useState<{ width: string, height: string } | null>(null);
   // ** FINE STATO **
-
+const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+const [showInstallButton, setShowInstallButton] = useState(false);
 
   const subdivisions = {
     quarter: { name: '♩ 1/4', beats: 1 },
@@ -669,7 +674,17 @@ const playEndOfPhaseSound = () => {
   }, 50);
 };
   // FINE FUNZIONE RIPETI FASE
-
+useEffect(() => {
+  const handler = (e: any) => {
+    e.preventDefault();
+    setDeferredPrompt(e);
+    setShowInstallButton(true);
+  };
+  
+  window.addEventListener('beforeinstallprompt', handler);
+  
+  return () => window.removeEventListener('beforeinstallprompt', handler);
+}, []);
   // AGGIUNTO: Funzione per il Focus/Freeze
   const handleFocusToggle = () => {
     if (!isRunning || isPaused || isInBreak) return;
@@ -908,7 +923,18 @@ useEffect(() => {
   setIsInInterPhasePause(false);
   setCountdownBeat(0);
   };
-
+const handleInstallClick = async () => {
+  if (!deferredPrompt) return;
+  
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  
+  if (outcome === 'accepted') {
+    setShowInstallButton(false);
+  }
+  
+  setDeferredPrompt(null);
+};
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.max(seconds % 60, 0);
@@ -1628,7 +1654,18 @@ useEffect(() => {
     <span>{t.copyright} {t.allRightsReserved} - <a href="https://batterista.online" className="hover:text-neutral-400 transition">{t.website}</a></span>
     <span className="text-neutral-500">{t.version}</span>
   </div>
-  
+  {showInstallButton && (
+  <div className="flex items-center justify-center pt-4 border-t border-white/10">
+    <button
+      onClick={handleInstallClick}
+      className="flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-6 py-3 text-sm font-semibold text-blue-300 transition hover:border-blue-400/40 hover:bg-blue-500/20 hover:text-blue-200"
+    >
+      
+
+<Download size={18} className="relative" /> {t.installApp}
+    </button>
+  </div>
+)}
   <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-neutral-500 pt-4 border-t border-white/10">
     <span>{t.supportApp}</span>
     <a 
