@@ -887,6 +887,10 @@ useEffect(() => {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isRunning, isPaused, isInBreak, phaseDurations]);
+  
+  useEffect(() => {
+  document.documentElement.style.colorScheme = 'dark';
+}, []);
 
   const handleReset = () => {
   // Ferma tutto
@@ -997,7 +1001,7 @@ const handleInstallClick = async () => {
 };
 
   return (
-<div className="relative min-h-screen overflow-hidden overflow-x-hidden max-w-full w-full bg-[#0b0d0e] text-white flex justify-center">
+<div className="relative min-h-screen overflow-hidden overflow-x-hidden max-w-full w-full bg-[#0b0d0e] text-white flex justify-center" style={{ colorScheme: 'dark' }}>
 
 
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
@@ -1401,20 +1405,21 @@ const handleInstallClick = async () => {
                 
                 {/* 5. SETTINGS: order-5 (Mobile) / lg:order-3 (Desktop) */}
                 <motion.div
-                    variants={scaleIn}
-                    className="order-5 lg:order-3 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
-                >
+    variants={scaleIn}
+    className="order-5 lg:order-3 rounded-3xl border border-white/10 bg-[#18181b] p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)]"
+>
                     {/* Pulsante a tutta larghezza */}
                     <button
-                    onClick={() => {
-                        setShowSettings(!showSettings);
-                        setShowInstructions(false); 
-                    }}
-                    className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
-                    >
-                    <span>Settings</span>
-                    {showSettings ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </button>
+  onClick={() => {
+    setShowSettings(!showSettings);
+    setShowInstructions(false); 
+  }}
+  className="flex w-full items-center justify-between text-sm font-semibold transition"
+  style={{ backgroundColor: '#18181b', padding: '12px', borderRadius: '12px' }}
+>
+  <span style={{ color: '#d4d4d8' }}>Settings</span>
+  {showSettings ? <ChevronUp size={18} style={{ color: '#d4d4d8' }} /> : <ChevronDown size={18} style={{ color: '#d4d4d8' }} />}
+</button>
 
                     <AnimatePresence initial={false}>
                     {showSettings && (
@@ -1563,19 +1568,23 @@ const handleInstallClick = async () => {
 
                 {/* 6. INFO & ISTRUZIONI: order-6 (Mobile) / lg:order-4 (Desktop) */}
                 <motion.div
-                    variants={scaleIn}
-                    className="order-6 lg:order-4 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
-                >
+    variants={scaleIn}
+    className="order-5 lg:order-3 rounded-3xl border border-white/10 bg-[#18181b] p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)]"
+>
                     <button
-                    onClick={() => {
-                        setShowInstructions(!showInstructions);
-                        setShowSettings(false); 
-                    }}
-                    className="flex w-full items-center justify-between text-sm font-semibold text-neutral-300 transition hover:text-white"
-                    >
-                    <span className="flex items-center gap-2"><Info size={16} /> {t.infoInstructions}</span>
-                    {showInstructions ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </button>
+  onClick={() => {
+    setShowInstructions(!showInstructions);
+    setShowSettings(false); 
+  }}
+  className="flex w-full items-center justify-between text-sm font-semibold transition"
+  style={{ backgroundColor: '#18181b', padding: '12px', borderRadius: '12px' }}
+>
+  <span className="flex items-center gap-2" style={{ color: '#d4d4d8' }}>
+    <Info size={16} style={{ color: '#d4d4d8' }} /> 
+    <span style={{ color: '#d4d4d8' }}>{t.infoInstructions}</span>
+  </span>
+  {showInstructions ? <ChevronUp size={18} style={{ color: '#d4d4d8' }} /> : <ChevronDown size={18} style={{ color: '#d4d4d8' }} />}
+</button>
 
                     <AnimatePresence initial={false}>
                     {showInstructions && (
@@ -1651,7 +1660,7 @@ const handleInstallClick = async () => {
   className="mt-16 flex flex-col gap-4 text-center text-[11px] uppercase tracking-[0.3em] text-neutral-600"
 >
   <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-    <span>{t.copyright} {t.allRightsReserved} - <a href="https://batterista.online" className="hover:text-neutral-400 transition">{t.website}</a></span>
+    <span>{t.copyright} <a href="https://batterista.online" className="hover:text-neutral-400 transition">{t.website}</a>- <a href="mailto:info@batterista.online" className="hover:text-neutral-400 transition">info@batterista.online</a></span>
     <span className="text-neutral-500">{t.version}</span>
   </div>
   {showInstallButton && (
