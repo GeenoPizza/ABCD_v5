@@ -86,7 +86,7 @@ website: 'www.batterista.online',
     customizationDesc: 'Puoi modificare durate e velocità come vuoi cliccando la sezione "Settings": qui puoi decidere il BPM target (quello a cui vuoi arrivare), la durata di ogni sezione (da 1 a 5 minuti) e la percentuale di BPM per ogni sezione in base al BPM Target (la percentuale della sezione D (Destinazione) non è modificabile perché è ovviamente pari al 100%).',
     goToWebsite: 'Vai al sito Batterista Online',
     copyright: 'Copyright © Batterista Online - Tutti i diritti riservati -',
-    version: 'ABCD method versione 1.7',
+    version: 'ABCD method versione 1.8',
     supportApp: 'Aiutami a mantenere questa Applicazione sempre gratuita:',
 buyMeCoffee: 'offrimi un caffè',
 installApp: 'Installa ABCD come App',
@@ -94,7 +94,11 @@ installPrompt: 'Installa questa app sul tuo dispositivo per un accesso rapido!',
     audioNotSupported: 'Audio non supportato dal browser; il timer funzionerà senza suoni.',
     audioFailed: "Impossibile inizializzare l'audio. Consenti l'accesso o ricarica la pagina.",
     audioEnable: "Per abilitare i suoni interagisci con la pagina (es. premi Start) e consenti l'audio.",
-    pauseLabel: 'PAUSA'
+    pauseLabel: 'PAUSA',
+simpleMode: 'Modalità Semplice',
+advancedMode: 'Modalità ABCD',
+simpleModeDesc: 'Metronomo classico',
+advancedModeDesc: 'Allenamento progressivo'
   },
   en: {
     attention: 'Attention',
@@ -160,7 +164,7 @@ website: 'www.batterista.online',
     customizationDesc: 'You can modify durations and speeds as you like by clicking the "Settings" section: here you can set the target BPM (the one you want to reach), the duration of each section (from 1 to 5 minutes) and the BPM percentage for each section based on the Target BPM (the percentage of section D (Destination) is not modifiable because it is obviously equal to 100%).',
     goToWebsite: 'Go to Batterista Online website',
     copyright: 'Copyright © Batterista Online - All rights reserved -',
-    version: 'ABCD method version 1.7',
+    version: 'ABCD method version 1.8',
     supportApp: 'Help me keep this App always free:',
 buyMeCoffee: 'buy me a coffee',
 installApp: 'Install ABCD as App',
@@ -168,7 +172,11 @@ installPrompt: 'Install this app on your device for quick access!',
     audioNotSupported: 'Audio not supported by browser; the timer will work without sounds.',
     audioFailed: "Unable to initialize audio. Allow access or reload the page.",
     audioEnable: "To enable sounds interact with the page (e.g. press Start) and allow audio.",
-    pauseLabel: 'PAUSE'
+    pauseLabel: 'PAUSE',
+simpleMode: 'Simple Mode',
+advancedMode: 'ABCD Mode',
+simpleModeDesc: 'Classic metronome',
+advancedModeDesc: 'Progressive training'
   }
 };
 
@@ -250,10 +258,11 @@ const ABCDMetronome = () => {
   const [countdownBeat, setCountdownBeat] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false); 
-  const [beatFlash, setBeatFlash] = useState(false);
+  const [beatFlash, setBeatFlash] = useState(0);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [volume, setVolume] = useState(0.85);
   const [language, setLanguage] = useState<'it' | 'en'>('it');
+const [simpleMode, setSimpleMode] = useState(false);
   const t = translations[language];
   const phaseStyles = getPhaseStyles(language);
 
@@ -266,6 +275,7 @@ const ABCDMetronome = () => {
   const globalIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   
+
   // RIFERIMENTO PER LA FASE SUCCESSIVA AL BREAK (FIX LOGICA)
   const nextPhaseOnBreakEndRef = useRef<PhaseKey>('A'); 
   // Aggiungi questo ref in cima al componente (dopo gli altri useRef, circa linea 115):
@@ -290,11 +300,10 @@ const [showInstallButton, setShowInstallButton] = useState(false);
   const getPhasePercentage = (phase: PhaseKey) => phasePercentages[phase] / 100;
 
   const getCurrentBPM = () => {
-    // FIX: Durante il break, il BPM del metronomo dovrebbe basarsi sulla fase successiva.
-    // Usiamo nextPhaseOnBreakEndRef.current se siamo in break, altrimenti currentPhase.
+    if (simpleMode) return targetBPM;
     const phase = isInBreak ? nextPhaseOnBreakEndRef.current : currentPhase;
     return Math.round(targetBPM * getPhasePercentage(phase));
-  };
+};
   
   const ensureAudioContext = () => {
     if (typeof window === 'undefined') { return false; }
@@ -482,12 +491,33 @@ const playEndOfPhaseSound = () => {
     gainNode.gain.value = isAccent ? 0.3 : 0.15;
     osc.start(time);
     osc.stop(time + 0.05);
-    const delay = (time - ctx.currentTime) * 1000;
+    const delay = Math.max(0, (time - ctx.currentTime) * 1000);
     setTimeout(() => {
-      setBeatFlash(true);
-      setTimeout(() => setBeatFlash(false), 50);
+      setBeatFlash(prev => prev + 1); // Incrementa invece di toggle
     }, delay);
   };
+
+const circleFlashVariants = {
+  initial: { 
+    scale: 1,
+    boxShadow: "0 0 0px rgba(255, 255, 255, 0)",
+    backgroundColor: "rgba(255, 255, 255, 0)"
+  },
+  flash: (accentColor: string) => ({
+    scale: [1, 1.04, 1], // Leggera espansione
+    boxShadow: [
+      `0 0 0px ${hexToRgba(accentColor, 0)}`,
+      `0 0 40px ${hexToRgba(accentColor, 0.6)}`, // Glow esterno del colore fase
+      `0 0 0px ${hexToRgba(accentColor, 0)}`
+    ],
+    backgroundColor: [
+      "rgba(255, 255, 255, 0)",
+      hexToRgba(accentColor, 0.15), // Riempimento leggero
+      "rgba(255, 255, 255, 0)"
+    ],
+    transition: { duration: 0.12, ease: "easeOut" }
+  })
+};
   
   const scheduler = () => {
     if (!audioContextRef.current) { return; }
@@ -695,8 +725,20 @@ useEffect(() => {
 
   // INIZIO: LOGICA AGGIORNATA DEI TIMER E METRONOMO
 useEffect(() => {
+  // MODALITÀ SEMPLICE - solo metronomo
+  if (simpleMode) {
+    if (isRunning && !isPaused) {
+      startMetronome();
+    } else {
+      stopMetronome();
+    }
+    return () => {
+      stopMetronome();
+    };
+  }
+  
+  // MODALITÀ AVANZATA - codice originale
   // 1. --- Metronome Control ---
-  // Il metronomo gira se running, non in pausa, non in break E non in pausa inter-fase
   if (isRunning && !isPaused && !isInBreak && !isInInterPhasePause) {
     startMetronome();
   } else {
@@ -773,7 +815,7 @@ if (isRunning && !isPaused && isInBreak && countdownTimeoutsRef.current.length =
   // countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
   // countdownTimeoutsRef.current = [];
 };
-}, [isRunning, isPaused, isInBreak, isInInterPhasePause, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages, isFocused]); 
+}, [isRunning, isPaused, isInBreak, isInInterPhasePause, currentPhase, phaseDurations, subdivision, targetBPM, phasePercentages, isFocused, simpleMode]);
 // FINE: LOGICA AGGIORNATA DEI TIMER E METRONOMO
 
 
@@ -838,9 +880,27 @@ useEffect(() => {
   // ** FINE EFFECT **
 
   const handleStartStop = () => {
-  // Impedisci pausa/riprendi durante il countdown
+  // MODALITÀ SEMPLICE
+  if (simpleMode) {
+    if (isRunning) {
+      setIsPaused(!isPaused);
+    } else {
+      ensureAudioContext();
+      resumeAudioContext();
+      // Reset degli stati ABCD per sicurezza
+      setIsInBreak(false); 
+      setIsInInterPhasePause(false);
+      setCountdownBeat(0);
+      
+      setIsRunning(true);
+      setIsPaused(false);
+    }
+    return; // <--- Importante: usciamo subito qui
+  }
+  
+  // MODALITÀ AVANZATA (ABCD) - Resto del codice invariato
   if (isInBreak && countdownTimeoutsRef.current.length > 0) {
-    return; // Non fare nulla se siamo nel countdown
+    return;
   }
   
   if (isRunning) {
@@ -881,19 +941,28 @@ useEffect(() => {
   };
 
   useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('keydown', handleKeyDown);
 
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isRunning, isPaused, isInBreak, phaseDurations]);
+  return () => {
+    document.removeEventListener('keydown', handleKeyDown);
+  };
+  // Aggiungi simpleMode qui sotto:
+}, [isRunning, isPaused, isInBreak, phaseDurations, simpleMode]);
   
   useEffect(() => {
   document.documentElement.style.colorScheme = 'dark';
 }, []);
 
   const handleReset = () => {
-  // Ferma tutto
+  // MODALITÀ SEMPLICE - reset minimale
+  if (simpleMode) {
+    stopMetronome();
+    setIsRunning(false);
+    setIsPaused(false);
+    return;
+  }
+  
+  // MODALITÀ AVANZATA - reset completo
   stopMetronome();
   countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
   countdownTimeoutsRef.current = [];
@@ -1041,6 +1110,42 @@ const handleInstallClick = async () => {
     {language === 'it' ? '🇬🇧 English' : '🇮🇹 Italiano'}
   </button>
 </div>
+{/* Toggle Modalità */}
+<div className="mt-6 flex items-center justify-center gap-4">
+  <button
+    onClick={() => {
+      if (isRunning) handleReset();
+      setSimpleMode(false);
+      setShowSettings(false);
+    }}
+    disabled={false}
+    className={`flex-1 rounded-xl border px-4 py-3 text-sm font-semibold transition ${
+      !simpleMode
+        ? 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200'
+        : 'border-white/10 bg-white/5 text-neutral-400 hover:border-white/20 hover:text-neutral-300'
+    } `}
+  >
+    <div>{t.advancedMode}</div>
+    <div className="text-xs font-normal mt-0.5 opacity-70">{t.advancedModeDesc}</div>
+  </button>
+  
+  <button
+    onClick={() => {
+      if (isRunning) handleReset();
+      setSimpleMode(true);
+      setShowSettings(false);
+    }}
+    disabled={false}
+    className={`flex-1 rounded-xl border px-4 py-3 text-sm font-semibold transition ${
+      simpleMode
+        ? 'border-blue-400/40 bg-blue-500/20 text-blue-200'
+        : 'border-white/10 bg-white/5 text-neutral-400 hover:border-white/20 hover:text-neutral-300'
+    } `}
+  >
+    <div>{t.simpleMode}</div>
+    <div className="text-xs font-normal mt-0.5 opacity-70">{t.simpleModeDesc}</div>
+  </button>
+</div>
 
 
 
@@ -1078,34 +1183,36 @@ const handleInstallClick = async () => {
                 >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_rgba(17,19,22,0.6))] opacity-90" />
                     <div className="relative z-10 space-y-12">
-                        {/* Pills - VISIBILE SEMPRE */}
-                        <motion.div
-                            variants={staggerParent}
-                            initial="hidden"
-                            animate="visible"
-                            className="grid grid-cols-2 gap-3 justify-items-center sm:grid-cols-4" 
-                        >
-                            {phaseOrder.map(key => (
-                                <motion.div
-                                key={key}
-                                variants={pillVariant}
-                                className={`group flex items-center justify-center w-full gap-0.5 rounded-full border border-white/5 px-3.5 py-1.5 text-sm transition ${
-                                    currentPhase === key
-                                    ? `bg-gradient-to-r ${phaseStyles[key].color} text-white font-semibold shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
-                                    : 'bg-white/5 text-neutral-300 hover:text-white'
-                                }`}
-                                >
-                                <span className="font-bold" style={{ color: currentPhase === key ? 'white' : phaseStyles[key].accent }}>
-                                    {key}
-                                </span>
-                                <span className={`font-light transition ${currentPhase === key ? 'text-white/80' : 'text-neutral-400'}`}>
-                                    {phaseStyles[key].name.substring(1)}
-                                </span>
-                                </motion.div>
-                            ))}
-                        </motion.div>
+                        {/* Pills - SOLO MODALITÀ AVANZATA */}
+{!simpleMode && (
+<motion.div
+    variants={staggerParent}
+    initial="hidden"
+    animate="visible"
+    className="grid grid-cols-2 gap-3 justify-items-center sm:grid-cols-4" 
+>
+    {phaseOrder.map(key => (
+        <motion.div
+        key={key}
+        variants={pillVariant}
+        className={`group flex items-center justify-center w-full gap-0.5 rounded-full border border-white/5 px-3.5 py-1.5 text-sm transition ${
+            currentPhase === key
+            ? `bg-gradient-to-r ${phaseStyles[key].color} text-white font-semibold shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
+            : 'bg-white/5 text-neutral-300 hover:text-white'
+        }`}
+        >
+        <span className="font-bold" style={{ color: currentPhase === key ? 'white' : phaseStyles[key].accent }}>
+            {key}
+        </span>
+        <span className={`font-light transition ${currentPhase === key ? 'text-white/80' : 'text-neutral-400'}`}>
+            {phaseStyles[key].name.substring(1)}
+        </span>
+        </motion.div>
+    ))}
+</motion.div>
+)}
 
-                        {/* FIX: Wrapper Relative per stabilizzare le dimensioni */}
+{/* FIX: Wrapper Relative per stabilizzare le dimensioni */}
                         <div className="relative" style={contentDimensions ?? {}}>
                             <AnimatePresence mode="wait">
   {isInInterPhasePause ? (
@@ -1160,15 +1267,53 @@ const handleInstallClick = async () => {
     > 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
                                     <div className="relative mx-auto flex h-52 w-52 sm:h-64 sm:w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
-                                        <div
-                                        className="absolute inset-0 rounded-full border-[10px] transition-all duration-200"
-                                        style={{
-                                            borderColor: beatFlash ? phaseStyles[currentPhase].accent : 'rgba(255,255,255,0.12)',
-                                            boxShadow: beatFlash
-                                            ? `0 0 70px ${phaseStyles[currentPhase].accent}66, inset 0 0 35px ${phaseStyles[currentPhase].accent}33`
-                                            : 'inset 0 0 28px rgba(0,0,0,0.4)'
-                                        }}
-                                        />
+                                        {/* Livello Base (Sempre visibile) */}
+<div 
+  className="absolute inset-0 rounded-full border-[10px] transition-colors duration-500"
+  style={{ 
+    borderColor: 'rgba(255,255,255,0.12)',
+    boxShadow: 'inset 0 0 28px rgba(0,0,0,0.4)'
+  }} 
+/>
+
+{/* Livello Flash (Si attiva al beat) */}
+<motion.div
+  key={beatFlash}
+  initial={{ 
+    scale: 1,
+    boxShadow: `0 0 0px ${hexToRgba(phaseStyles[currentPhase].accent, 0)}`,
+    borderColor: phaseStyles[currentPhase].accent + '00'
+  }}
+  animate={{ 
+    scale: [1, 1.04, 1],
+    boxShadow: [
+      `0 0 0px ${hexToRgba(phaseStyles[currentPhase].accent, 0)}`,
+      `0 0 60px ${hexToRgba(phaseStyles[currentPhase].accent, 0.8)}, 0 0 100px ${hexToRgba(phaseStyles[currentPhase].accent, 0.4)}`,
+      `0 0 0px ${hexToRgba(phaseStyles[currentPhase].accent, 0)}`
+    ],
+    borderColor: [
+      phaseStyles[currentPhase].accent + '00',
+      phaseStyles[currentPhase].accent + '60',  // Opacità ridotta da FF a 60
+      phaseStyles[currentPhase].accent + '00'
+    ]
+  }}
+  transition={{ duration: 0.15, ease: "easeOut" }}
+  className="absolute inset-0 rounded-full border-[10px] blur-[2px]"  // Aggiunto blur
+  style={{ zIndex: 1 }}
+/>
+
+{/* Effetto Glow diffuso extra - AGGIUNGI QUESTO */}
+<motion.div
+  key={`glow-${beatFlash}`}
+  initial={{ opacity: 0 }}
+  animate={{ opacity: [0, 0.4, 0] }}
+  transition={{ duration: 0.15, ease: "easeOut" }}
+  className="absolute inset-0 rounded-full"
+  style={{
+    background: `radial-gradient(circle, ${phaseStyles[currentPhase].accent} 0%, transparent 70%)`,
+    zIndex: 0
+  }}
+/>
                                         <div className="relative text-center">
                                         <div className="text-[4.85rem] font-semibold" style={{ color: phaseStyles[currentPhase].accent }}>{getCurrentBPM()}</div>
                                         <div className="text-sm uppercase tracking-[0.4em] text-neutral-400">BPM</div>
@@ -1176,17 +1321,31 @@ const handleInstallClick = async () => {
                                     </div>
 
                                     <div className="space-y-6 text-left">
-                                        <div>
-                                        <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">{t.currentSection}</span>
-                                        <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
-                                            {currentPhase} • {phaseStyles[currentPhase].name}
-                                        </h2>
-                                        <p className="mt-2 text-sm text-neutral-400">
-                                            {subdivisions[subdivision].name} • {t.targetBpm} {targetBPM} BPM • {t.duration} {phaseDurations[currentPhase]} {t.minutes}
-                                        </p>
-                                        </div>
+    <div>
+    {!simpleMode && (
+      <>
+        <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">{t.currentSection}</span>
+        <h2 className={`mt-3 text-3xl font-semibold ${phaseStyles[currentPhase].textColor}`}>
+            {currentPhase} • {phaseStyles[currentPhase].name}
+        </h2>
+      </>
+    )}
+    {simpleMode && (
+      <>
+        <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">METRONOMO</span>
+        <h2 className="mt-3 text-3xl font-semibold text-blue-300">
+            {t.simpleMode}
+        </h2>
+      </>
+    )}
+                                       <p className="mt-2 text-sm text-neutral-400">
+        {subdivisions[subdivision].name} • {targetBPM} BPM
+        {!simpleMode && ` • ${t.duration} ${phaseDurations[currentPhase]} ${t.minutes}`}
+    </p>
+    </div>
 
-                                        <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
+    {!simpleMode && (
+    <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
                                         <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.35em] text-neutral-400">
                                             {t.totalTime} • {formatTime(totalTimeRemaining)}
                                         </span>
@@ -1194,6 +1353,7 @@ const handleInstallClick = async () => {
                                             {phasePercentages[currentPhase]}% {t.ofTargetSpeed}
                                         </span>
                                         </div>
+)}
                                         
                                         {/* AGGIUNTO: Indicatore Focus Attivo */}
                                         {isFocused && (
@@ -1202,6 +1362,7 @@ const handleInstallClick = async () => {
                                             </div>
                                         )}
 
+                                        {!simpleMode && (
                                         <div>
                                         <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
                                             <span>{t.sectionProgress}</span>
@@ -1219,6 +1380,7 @@ const handleInstallClick = async () => {
                                             />
                                         </div>
                                         </div>
+)}
                                     </div>
                                     </div>
                                 </motion.div>
@@ -1239,12 +1401,12 @@ const handleInstallClick = async () => {
                     </div>
                     <div className="flex items-center gap-4"> 
                     
-    {/* Pulsante Reset Globale - GLOW MULTICOLORE PERMANENTE ABCD */}
+    {/* 1. Pulsante Reset Globale */}
+{!simpleMode && (
     <button
         onClick={handleReset}
         className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
         title={t.resetTooltip}
-        // Applica il glow ABCD in modo permanente
         style={{ 
             boxShadow: getGlobalResetGlow(),
             transition: 'box-shadow 0.3s ease-in-out'
@@ -1253,39 +1415,50 @@ const handleInstallClick = async () => {
         <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
         <RotateCcw size={22} className="relative" />
     </button>
+)}
 
-                    {/* Pulsante Reset Fase Corrente - GLOW COLORE CORRENTE */}
-                    <button
-                        onClick={handleRestartPhase}
-                        disabled={!isRunning || isInBreak || isFocused} // AGGIUNTO: Disabilita se in Focus
-                        className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        title={`${t.repeatTooltip} ${currentPhase}`}
-                        // Applicazione condizionale del glow
-                        style={{ boxShadow: isRunning && !isInBreak && !isFocused ? `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.45)}` : 'none', transition: 'box-shadow 0.3s ease-in-out' }}
-                    >
-                        <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
-                        <RefreshCcw size={22} className="relative" />
-                    </button>
+{/* 2. Pulsante Reset Fase Corrente */}
+{!simpleMode && (
+    <button
+        onClick={handleRestartPhase}
+        disabled={!isRunning || isInBreak || isFocused}
+        className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-neutral-300 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+        title={`${t.repeatTooltip} ${currentPhase}`}
+        style={{ 
+            boxShadow: isRunning && !isInBreak && !isFocused ? `0 0 25px ${hexToRgba(phaseStyles[currentPhase].accent, 0.45)}` : 'none', 
+            transition: 'box-shadow 0.3s ease-in-out' 
+        }}
+    >
+        <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
+        <RefreshCcw size={22} className="relative" />
+    </button>
+)}
 
-                    {/* Pulsante Play/Pausa */}
-                    <button
-  onClick={handleStartStop}
-  disabled={isInBreak && countdownTimeoutsRef.current.length > 0} // ← AGGIUNGI questa riga
-  className={`group relative flex flex-1 items-center justify-center gap-1 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
-    isRunning && !isPaused
-      ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
-      : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
-  } ${isInBreak && countdownTimeoutsRef.current.length > 0 ? 'opacity-40 cursor-not-allowed' : ''}`} // ← AGGIUNGI questa classe condizionale
+{/* Pulsante Play/Pausa - RIPRISTINATO ORIGINALE */}
+<button
+    onClick={handleStartStop}
+    disabled={isInBreak && countdownTimeoutsRef.current.length > 0}
+    className={`relative flex flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
+        isRunning && !isPaused
+            ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
+            : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
+    } ${isInBreak && countdownTimeoutsRef.current.length > 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
 >
-  {/* LOGICA ICONA CORRETTA */}
-  {isRunning && !isPaused 
-    ? <Pause size={18} className="relative" /> 
-    : <Play size={18} className="relative" />}
-  {/* LOGICA TESTO */}
-  <span className="relative mr-1">{isRunning && !isPaused ? t.pause : isPaused ? t.start : t.start}</span>
+    {isRunning && !isPaused ? (
+        <>
+            <Pause size={24} fill="currentColor" />
+            <span>PAUSE</span>
+        </>
+    ) : (
+        <>
+            <Play size={24} fill="currentColor" />
+            <span>START</span>
+        </>
+    )}
 </button>
                     
                     {/* AGGIUNTO: Pulsante FOCUS/FREEZE */}
+{!simpleMode && (
                     <button
                         onClick={handleFocusToggle}
                         disabled={!isRunning || isInBreak || isPaused} // Disabilita se non in Run, in Break, o Pausato
@@ -1299,8 +1472,10 @@ const handleInstallClick = async () => {
                         <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
                         <Target size={22} className="relative" />
                     </button>
+)}
 
                     {/* Pulsante Skip Forward */}
+{!simpleMode && (
                     <button
                         onClick={() => goToNextPhase(true)}
                         disabled={!isRunning || isInBreak || currentPhase === 'D' || isFocused} // AGGIUNTO: Disabilita se in Focus
@@ -1310,6 +1485,7 @@ const handleInstallClick = async () => {
                         <span className="absolute inset-0 translate-y-full bg-gradient-to-br from-white/15 to-transparent transition duration-300 group-hover:translate-y-0" />
                         <SkipForward size={22} className="relative" />
                     </button>
+)}
                     </div>
                     
                     <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3">
@@ -1338,15 +1514,47 @@ const handleInstallClick = async () => {
                     className="order-3 lg:order-1 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(6,8,10,0.35)] backdrop-blur"
                 >
                     <div className="flex items-center justify-between">
-                    <div>
+                    <div className="w-full">
+  {!simpleMode && (
   <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">{t.overallTime}</span>
-  {isInInterPhasePause ? (
+  )}
+  {simpleMode && (
+  <span className="text-xs uppercase tracking-[0.35em] text-neutral-500">METRONOMO CLASSICO ATTIVO</span>
+  )}
+  {!simpleMode && isInInterPhasePause ? (
     <div className="mt-2 text-3xl font-semibold text-amber-400 tracking-wider">{t.pauseLabel}</div>
-  ) : (
+  ) : !simpleMode ? (
     <div className="mt-2 text-3xl font-semibold text-neutral-100">{formatTime(totalTimeRemaining)}</div>
+  ) : (
+    <div className="mt-4 space-y-2">
+      <div className="flex items-center gap-3">
+        <button
+  onClick={() => adjustBPM(-1)}
+  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white text-xl font-bold transition hover:border-white/40 hover:bg-white/20"
+>
+  −
+</button>
+        <input
+          type="range"
+          value={targetBPM}
+          onChange={(e) => setTargetBPM(Number(e.target.value))}
+          className="flex-1 accent-blue-500 [--tw-ring-color:transparent]"
+          min="40"
+          max="240"
+        />
+        <button
+  onClick={() => adjustBPM(1)}
+  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white text-xl font-bold transition hover:border-white/40 hover:bg-white/20"
+>
+  +
+</button>
+        <div className="w-12 text-right text-2xl font-semibold text-blue-300">{targetBPM}</div>
+      </div>
+    </div>
   )}
 </div>
                     {/* Formattazione del tempo su due righe */}
+{!simpleMode && (
                     <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-center">
                         <span style={{ color: phaseStyles[currentPhase].accent, fontWeight: 'bold' }}>
                             {`${t.sectionLabel} ${currentPhase}:`}
@@ -1355,6 +1563,7 @@ const handleInstallClick = async () => {
                             {`${phaseDurations[currentPhase]} ${t.minutes}`}
                         </div>
                     </div>
+)}
                     </div>
                     {audioError && (
                     <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
@@ -1364,8 +1573,12 @@ const handleInstallClick = async () => {
                 </motion.div>
 
                 {/* 4. PROFILO FASI -> OVERVIEW SEZIONI: order-4 (Mobile) / lg:order-2 (Desktop) */}
-                <motion.div
+{!simpleMode && (                
+<motion.div
+key="overview-sections"
                     variants={scaleIn}
+initial="hidden"        // <--- ASSICURATI CHE CI SIANO QUESTI
+    animate="visible"       // <--- ASSICURATI CHE CI SIANO QUESTI
                     className="order-4 lg:order-2 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur"
                 >
                     <div className="flex items-center justify-between">
@@ -1402,6 +1615,7 @@ const handleInstallClick = async () => {
                     ))}
                     </div>
                 </motion.div>
+)}
                 
                 {/* 5. SETTINGS: order-5 (Mobile) / lg:order-3 (Desktop) */}
                 <motion.div
@@ -1482,7 +1696,8 @@ const handleInstallClick = async () => {
                             </div>
                         </div>
 
-                        <div>
+{!simpleMode && (                        
+<div>
                             <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">{t.sectionDuration}</label>
                             <div className="space-y-4">
                             {phaseOrder.map(key => (
@@ -1510,6 +1725,9 @@ const handleInstallClick = async () => {
                             ))}
                             </div>
                         </div>
+ )}
+
+                        {!simpleMode && (
 
                         <div>
                             <label className="mb-3 block text-xs uppercase tracking-[0.35em] text-neutral-500">{t.speedPercentages}</label>
@@ -1541,6 +1759,8 @@ const handleInstallClick = async () => {
                             ))}
                             </div>
                         </div>
+)}
+
 
                         {/* Pulsante Reset alleggerito nello stile e nel testo */}
                         <div className="border-t border-white/10 pt-5 space-y-3">

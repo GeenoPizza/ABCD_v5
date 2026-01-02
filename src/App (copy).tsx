@@ -977,7 +977,8 @@ useEffect(() => {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
       <div className="pointer-events-none absolute -bottom-32 left-[12%] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,_rgba(96,129,118,0.18),_transparent_68%)] blur-3xl" />
       <div className="pointer-events-none absolute -top-48 right-[-10%] h-[620px] w-[620px] rounded-full bg-[radial-gradient(circle,_rgba(71,85,105,0.16),_transparent_70%)] blur-3xl" />
-<div className="relative z-10 mx-auto w-full max-w-full sm:max-w-6xl px-8 sm:px-8 pb-8 pt-0 sm:pb-16 sm:pt-10 scale-[0.88] origin-center sm:scale-100">
+<div className="relative z-10 mx-auto w-[85%] sm:w-full max-w-full
+ sm:max-w-6xl px-8 sm:px-8 pb-8 pt-2 sm:pb-16 sm:pt-10 scale-[1.00] origin-center sm:scale-100">
 
         <motion.header
           variants={fadeUp}
@@ -1240,7 +1241,7 @@ useEffect(() => {
                     <button
   onClick={handleStartStop}
   disabled={isInBreak && countdownTimeoutsRef.current.length > 0} // ← AGGIUNGI questa riga
-  className={`group relative flex flex-1 items-center justify-center gap-3 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
+  className={`group relative flex flex-1 items-center justify-center gap-1 overflow-hidden rounded-2xl px-10 py-4 text-lg font-semibold transition shadow-[0_18px_40px_rgba(7,24,19,0.4)] ${
     isRunning && !isPaused
       ? 'border border-red-500/20 bg-gradient-to-r from-[#734848] to-[#5a3535] text-red-50'
       : 'border border-emerald-400/20 bg-gradient-to-r from-[#3e5c55] to-[#2e4741] text-emerald-50'
@@ -1248,10 +1249,10 @@ useEffect(() => {
 >
   {/* LOGICA ICONA CORRETTA */}
   {isRunning && !isPaused 
-    ? <Pause size={24} className="relative" /> 
-    : <Play size={24} className="relative" />}
+    ? <Pause size={18} className="relative" /> 
+    : <Play size={18} className="relative" />}
   {/* LOGICA TESTO */}
-  <span className="relative">{isRunning && !isPaused ? t.pause : isPaused ? t.start : t.start}</span>
+  <span className="relative mr-1">{isRunning && !isPaused ? t.pause : isPaused ? t.start : t.start}</span>
 </button>
                     
                     {/* AGGIUNTO: Pulsante FOCUS/FREEZE */}
