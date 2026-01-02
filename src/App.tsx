@@ -497,27 +497,7 @@ const playEndOfPhaseSound = () => {
     }, delay);
   };
 
-const circleFlashVariants = {
-  initial: { 
-    scale: 1,
-    boxShadow: "0 0 0px rgba(255, 255, 255, 0)",
-    backgroundColor: "rgba(255, 255, 255, 0)"
-  },
-  flash: (accentColor: string) => ({
-    scale: [1, 1.04, 1], // Leggera espansione
-    boxShadow: [
-      `0 0 0px ${hexToRgba(accentColor, 0)}`,
-      `0 0 40px ${hexToRgba(accentColor, 0.6)}`, // Glow esterno del colore fase
-      `0 0 0px ${hexToRgba(accentColor, 0)}`
-    ],
-    backgroundColor: [
-      "rgba(255, 255, 255, 0)",
-      hexToRgba(accentColor, 0.15), // Riempimento leggero
-      "rgba(255, 255, 255, 0)"
-    ],
-    transition: { duration: 0.12, ease: "easeOut" }
-  })
-};
+
   
   const scheduler = () => {
     if (!audioContextRef.current) { return; }
