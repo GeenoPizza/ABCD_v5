@@ -1170,8 +1170,7 @@ const handleInstallClick = async () => {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
       <div className="pointer-events-none absolute -bottom-32 left-[12%] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle,_rgba(96,129,118,0.18),_transparent_68%)] blur-3xl" />
       <div className="pointer-events-none absolute -top-48 right-[-10%] h-[620px] w-[620px] rounded-full bg-[radial-gradient(circle,_rgba(71,85,105,0.16),_transparent_70%)] blur-3xl" />
-<div className="relative z-10 mx-auto w-[85%] sm:w-full max-w-full
- sm:max-w-6xl px-8 sm:px-8 pb-8 pt-2 sm:pb-16 sm:pt-10 scale-[1.00] origin-center sm:scale-100">
+<div className={`relative z-10 mx-auto ${simpleMode ? 'w-[95%]' : 'w-[85%]'} sm:w-full max-w-full sm:max-w-6xl ${simpleMode ? 'px-4' : 'px-8'} sm:px-8 pb-8 pt-2 sm:pb-16 sm:pt-10 scale-[1.00] origin-center sm:scale-100`}>
 
         <motion.header
           variants={fadeUp}
@@ -1274,13 +1273,13 @@ const handleInstallClick = async () => {
     animate="visible"
 >
             {/* COLONNA DI SINISTRA (lg:w-7/12 - Metronomo, Controlli) */}
-            <div className="flex flex-col gap-8 w-full max-w-2xl lg:max-w-none lg:w-7/12"> 
-                
+<div className={`flex flex-col gap-8 w-full ${simpleMode ? 'max-w-full' : 'max-w-2xl lg:max-w-none lg:w-7/12'}`}>
+
                 {/* 1. SEZIONE METRONOMO: order-1 (Mobile/Desktop) */}
-                <motion.section
+               <motion.section
     variants={scaleIn}
     className={`order-1 lg:order-1 relative overflow-hidden rounded-[32px] border border-white/8 bg-white/5 shadow-[0_32px_70px_rgba(8,10,12,0.35)] backdrop-blur-xl ${
-      simpleMode ? 'p-6' : 'p-8'
+      simpleMode ? 'p-6 w-full' : 'p-8'
     }`}
 >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_rgba(17,19,22,0.6))] opacity-90" />
@@ -1449,7 +1448,7 @@ const handleInstallClick = async () => {
                                         </div>
                                     </div>
 
-                                   <div className={`space-y-6 ${simpleMode ? 'text-center w-full max-w-md' : 'text-left'}`}>
+                                   <div className={`space-y-6 ${simpleMode ? 'text-center w-full max-w-full px-4' : 'text-left'}`}>
     <div>
     {!simpleMode && (
       <>
@@ -1636,9 +1635,9 @@ const handleInstallClick = async () => {
                 
             </div>
             
-            {/* COLONNA DI DESTRA (lg:w-5/12 - Tempo, Overview, Settings, Info) */}
-            <div className="flex flex-col gap-8 w-full max-w-2xl lg:max-w-none lg:w-5/12"> 
-                
+           {/* COLONNA DI DESTRA (lg:w-5/12 - Tempo, Overview, Settings, Info) */}
+<div className={`flex flex-col gap-8 w-full ${simpleMode ? 'max-w-full' : 'max-w-2xl lg:max-w-none lg:w-5/12'}`}>
+
                 {/* 2. TEMPO COMPLESSIVO: order-3 (Mobile) / lg:order-1 (Desktop) */}
                 <motion.div
                     variants={scaleIn}
@@ -1751,7 +1750,9 @@ initial="hidden"        // <--- ASSICURATI CHE CI SIANO QUESTI
                 {/* 5. SETTINGS: order-5 (Mobile) / lg:order-3 (Desktop) */}
                 <motion.div
     variants={scaleIn}
-    className="order-5 lg:order-3 rounded-3xl border border-white/10 bg-[#18181b] p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)]"
+    className={`order-2 lg:order-2 space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_18px_40px_rgba(5,7,9,0.4)] backdrop-blur ${
+      simpleMode ? 'w-full' : ''
+    }`}
 >
                     {/* Pulsante a tutta larghezza */}
                     <button
