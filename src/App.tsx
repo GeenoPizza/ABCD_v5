@@ -262,6 +262,7 @@ const ABCDMetronome = () => {
   const [audioError, setAudioError] = useState<string | null>(null);
   const [volume, setVolume] = useState(0.85);
   const [language, setLanguage] = useState<'it' | 'en'>('it');
+const [bgPhaseColor, setBgPhaseColor] = useState<PhaseKey>('A');
 const [simpleMode, setSimpleMode] = useState(false);
   const t = translations[language];
   const phaseStyles = getPhaseStyles(language);
@@ -275,6 +276,7 @@ const [simpleMode, setSimpleMode] = useState(false);
   const globalIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   
+const [simpleColorIndex, setSimpleColorIndex] = useState(0);
 
   // RIFERIMENTO PER LA FASE SUCCESSIVA AL BREAK (FIX LOGICA)
   const nextPhaseOnBreakEndRef = useRef<PhaseKey>('A'); 
@@ -305,6 +307,11 @@ const [showInstallButton, setShowInstallButton] = useState(false);
     return Math.round(targetBPM * getPhasePercentage(phase));
 };
   
+const getSimpleModeStyle = () => {
+  const phase = phaseOrder[simpleColorIndex];
+  return phaseStyles[phase];
+};
+
   const ensureAudioContext = () => {
     if (typeof window === 'undefined') { return false; }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') { return true; }
@@ -556,6 +563,7 @@ const playEndOfPhaseSound = () => {
   
   // Imposta il riferimento per la fase successiva
   nextPhaseOnBreakEndRef.current = phaseToStartAfterBreak;
+setBgPhaseColor(phaseToStartAfterBreak);
 
   setIsInBreak(true);
   setIsPaused(false); 
@@ -660,6 +668,17 @@ const playEndOfPhaseSound = () => {
     nextPhaseOnBreakEndRef.current = 'A';
   }
 };
+
+// Ciclo colori in Simple Mode
+useEffect(() => {
+  if (simpleMode && isRunning && !isPaused) {
+    const colorInterval = setInterval(() => {
+      setSimpleColorIndex(prev => (prev + 1) % 4);
+    }, 4000); // Cambia colore ogni 4 secondi
+    
+    return () => clearInterval(colorInterval);
+  }
+}, [simpleMode, isRunning, isPaused]);
 
   // FUNZIONE RIPETI FASE CORRENTE (FIX LOGICA)
   const handleRestartPhase = () => {
@@ -976,6 +995,88 @@ useEffect(() => {
   setIsInInterPhasePause(false);
   setCountdownBeat(0);
   };
+
+const handlePhaseClick = (targetPhase: PhaseKey) => {
+  // Se non è in esecuzione, avvia dalla fase cliccata
+  if (!isRunning) {
+    ensureAudioContext();
+    resumeAudioContext();
+    setIsPaused(false);
+    setIsFocused(false);
+    setIsInInterPhasePause(false);
+    setTotalTimeRemaining(calculateTotalTime(phaseDurations));
+    setCurrentPhase(targetPhase);
+    setTimeRemaining(phaseDurations[targetPhase] * 60);
+    nextPhaseOnBreakEndRef.current = targetPhase;
+    
+    setIsInBreak(true);
+    setIsRunning(true);
+    
+    setTimeout(() => {
+      startBreak(targetPhase);
+    }, 50);
+    return;
+  }
+  
+  // Se è in esecuzione, salta alla fase cliccata
+  if (isInBreak || isFocused || isPaused) return;
+  
+  stopMetronome();
+  if (intervalIdRef.current) { clearInterval(intervalIdRef.current); intervalIdRef.current = null; }
+  if (globalIntervalRef.current) { clearInterval(globalIntervalRef.current); globalIntervalRef.current = null; }
+  countdownTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+  countdownTimeoutsRef.current = [];
+  
+  setIsInInterPhasePause(false);
+  nextPhaseOnBreakEndRef.current = targetPhase;
+  
+  setIsInBreak(true);
+  setTimeout(() => {
+    startBreak(targetPhase);
+  }, 50);
+};
+
+// Carica settaggi da URL al mount
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const urlBpm = params.get('bpm');
+  const urlSub = params.get('sub');
+  const urlDurations = params.get('dur');
+  const urlPercentages = params.get('perc');
+  const urlLang = params.get('lang');
+  
+  if (urlBpm) setTargetBPM(Number(urlBpm));
+  if (urlSub && ['quarter', 'eighth', 'triplet', 'sixteenth'].includes(urlSub)) {
+    setSubdivision(urlSub as typeof subdivision);
+  }
+  if (urlDurations) {
+    const [a, b, c, d] = urlDurations.split(',').map(Number);
+    if (a && b && c && d) setPhaseDurations({ A: a, B: b, C: c, D: d });
+  }
+  if (urlPercentages) {
+    const [a, b, c] = urlPercentages.split(',').map(Number);
+    if (a && b && c) setPhasePercentages({ A: a, B: b, C: c, D: 100 });
+  }
+  if (urlLang && (urlLang === 'it' || urlLang === 'en')) {
+    setLanguage(urlLang);
+  }
+}, []);
+
+// Aggiorna URL quando cambiano i settaggi
+useEffect(() => {
+  if (!isRunning) {
+    const params = new URLSearchParams();
+    params.set('bpm', targetBPM.toString());
+    params.set('sub', subdivision);
+    params.set('dur', `${phaseDurations.A},${phaseDurations.B},${phaseDurations.C},${phaseDurations.D}`);
+    params.set('perc', `${phasePercentages.A},${phasePercentages.B},${phasePercentages.C}`);
+    params.set('lang', language);
+    
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', newUrl);
+  }
+}, [targetBPM, subdivision, phaseDurations, phasePercentages, language, isRunning]);
+
 const handleInstallClick = async () => {
   if (!deferredPrompt) return;
   
@@ -1050,7 +1151,20 @@ const handleInstallClick = async () => {
 };
 
   return (
-<div className="relative min-h-screen overflow-hidden overflow-x-hidden max-w-full w-full bg-[#0b0d0e] text-white flex justify-center" style={{ colorScheme: 'dark' }}>
+<div className="relative min-h-screen overflow-hidden overflow-x-hidden max-w-full w-full text-white flex justify-center" style={{ colorScheme: 'dark' }}>
+  {/* Background animato per fase */}
+  <motion.div
+    key={bgPhaseColor}
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    transition={{ duration: 1.5, ease: "easeInOut" }}
+    className="absolute inset-0 bg-[#0b0d0e]"
+    style={{
+      background: !simpleMode && isRunning 
+        ? `radial-gradient(circle at center, ${hexToRgba(phaseStyles[bgPhaseColor].accent, 0.08)} 0%, #0b0d0e 60%)`
+        : '#0b0d0e'
+    }}
+  />
 
 
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(156,176,196,0.12),_transparent_62%)]" />
@@ -1105,7 +1219,13 @@ const handleInstallClick = async () => {
         : 'border-white/10 bg-white/5 text-neutral-400 hover:border-white/20 hover:text-neutral-300'
     } `}
   >
-    <div>{t.advancedMode}</div>
+    <div>
+      <span className="font-semibold text-[#88a7d0]">A</span>
+      <span className="font-semibold text-[#c2b68a]">B</span>
+      <span className="font-semibold text-[#d9a88a]">C</span>
+      <span className="font-semibold text-[#8ab7aa]">D</span>
+      <span className="ml-1">{t.advancedMode.replace('ABCD', '').trim()}</span>
+    </div>
     <div className="text-xs font-normal mt-0.5 opacity-70">{t.advancedModeDesc}</div>
   </button>
   
@@ -1158,9 +1278,11 @@ const handleInstallClick = async () => {
                 
                 {/* 1. SEZIONE METRONOMO: order-1 (Mobile/Desktop) */}
                 <motion.section
-                    variants={scaleIn}
-                    className="order-1 lg:order-1 relative overflow-hidden rounded-[32px] border border-white/8 bg-white/5 p-8 shadow-[0_32px_70px_rgba(8,10,12,0.35)] backdrop-blur-xl"
-                >
+    variants={scaleIn}
+    className={`order-1 lg:order-1 relative overflow-hidden rounded-[32px] border border-white/8 bg-white/5 shadow-[0_32px_70px_rgba(8,10,12,0.35)] backdrop-blur-xl ${
+      simpleMode ? 'p-6' : 'p-8'
+    }`}
+>
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_rgba(17,19,22,0.6))] opacity-90" />
                     <div className="relative z-10 space-y-12">
                         {/* Pills - SOLO MODALITÀ AVANZATA */}
@@ -1171,29 +1293,46 @@ const handleInstallClick = async () => {
     animate="visible"
     className="grid grid-cols-2 gap-3 justify-items-center sm:grid-cols-4" 
 >
-    {phaseOrder.map(key => (
-        <motion.div
-        key={key}
-        variants={pillVariant}
-        className={`group flex items-center justify-center w-full gap-0.5 rounded-full border border-white/5 px-3.5 py-1.5 text-sm transition ${
-            currentPhase === key
-            ? `bg-gradient-to-r ${phaseStyles[key].color} text-white font-semibold shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
-            : 'bg-white/5 text-neutral-300 hover:text-white'
-        }`}
-        >
-        <span className="font-bold" style={{ color: currentPhase === key ? 'white' : phaseStyles[key].accent }}>
-            {key}
-        </span>
-        <span className={`font-light transition ${currentPhase === key ? 'text-white/80' : 'text-neutral-400'}`}>
-            {phaseStyles[key].name.substring(1)}
-        </span>
-        </motion.div>
-    ))}
+    {phaseOrder.map(key => {
+  const isActive = currentPhase === key;
+  const progress = isActive && isRunning && !isInBreak 
+    ? ((phaseDurations[key] * 60 - timeRemaining) / (phaseDurations[key] * 60)) * 100 
+    : 0;
+  
+  return (
+    <motion.button
+      key={key}
+      variants={pillVariant}
+      onClick={() => handlePhaseClick(key)}
+      className={`relative group flex items-center justify-center w-full gap-0.5 rounded-full px-3.5 py-1.5 text-sm transition cursor-pointer ${
+        isActive
+          ? `bg-gradient-to-r ${phaseStyles[key].color} text-white font-semibold shadow-[0_8px_24px_rgba(0,0,0,0.25)]`
+          : 'bg-white/5 text-neutral-300 hover:text-white hover:bg-white/10 border border-white/10 hover:border-white/20'
+      }`}
+      style={isActive && isRunning && !isInBreak ? {
+        background: `linear-gradient(90deg, 
+          ${phaseStyles[key].accent} 0%, 
+          ${phaseStyles[key].accent} ${progress}%, 
+          rgba(255,255,255,0.05) ${progress}%, 
+          rgba(255,255,255,0.05) 100%)`,
+        boxShadow: `0 0 20px ${hexToRgba(phaseStyles[key].accent, 0.4)}, 0 8px 24px rgba(0,0,0,0.25)`,
+        border: `2px solid ${phaseStyles[key].accent}`
+      } : {}}
+    >
+      <span className="font-bold relative z-10" style={{ color: isActive ? 'white' : phaseStyles[key].accent }}>
+        {key}
+      </span>
+      <span className={`font-light transition relative z-10 ${isActive ? 'text-white/80' : 'text-neutral-400'}`}>
+        {phaseStyles[key].name.substring(1)}
+      </span>
+    </motion.button>
+  );
+})}
 </motion.div>
 )}
 
 {/* FIX: Wrapper Relative per stabilizzare le dimensioni */}
-                        <div className="relative" style={contentDimensions ?? {}}>
+                        <div className="relative" style={simpleMode ? {} : (contentDimensions ?? {})}>
                             <AnimatePresence mode="wait">
   {isInInterPhasePause ? (
     <motion.div
@@ -1245,7 +1384,7 @@ const handleInstallClick = async () => {
       className="w-full" 
       ref={metronomeContentRef}
     > 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center">
+     <div className={`${simpleMode ? 'flex flex-col items-center gap-8 w-full' : 'grid gap-8 lg:grid-cols-[minmax(0,260px)_1fr] lg:items-center'}`}>
                                     <div className="relative mx-auto flex h-52 w-52 sm:h-64 sm:w-64 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),rgba(12,13,14,0.82))] shadow-[0_32px_70px_rgba(10,12,14,0.6)]">
                                         {/* Livello Base (Sempre visibile) */}
 <div 
@@ -1255,34 +1394,41 @@ const handleInstallClick = async () => {
     boxShadow: 'inset 0 0 28px rgba(0,0,0,0.4)'
   }} 
 />
+{/* Livello Base Colorato (cambia colore dolcemente) */}
+<motion.div
+  key={`color-${simpleColorIndex}`}
+  initial={{ opacity: 0 }}
+  animate={{ opacity: 1 }}
+  exit={{ opacity: 0 }}
+  transition={{ duration: 1, ease: "easeInOut" }}
+  className="absolute inset-0 rounded-full border-[10px] blur-[2px]"
+  style={{ 
+    borderColor: (simpleMode ? getSimpleModeStyle().accent : phaseStyles[currentPhase].accent) + '30',
+    zIndex: 0
+  }}
+/>
 
 {/* Livello Flash (Si attiva al beat) */}
 <motion.div
   key={beatFlash}
   initial={{ 
     scale: 1,
-    boxShadow: `0 0 0px ${hexToRgba(phaseStyles[currentPhase].accent, 0)}`,
-    borderColor: phaseStyles[currentPhase].accent + '00'
+    boxShadow: `0 0 0px ${hexToRgba(simpleMode ? getSimpleModeStyle().accent : phaseStyles[currentPhase].accent, 0)}`
   }}
   animate={{ 
     scale: [1, 1.04, 1],
     boxShadow: [
-      `0 0 0px ${hexToRgba(phaseStyles[currentPhase].accent, 0)}`,
-      `0 0 60px ${hexToRgba(phaseStyles[currentPhase].accent, 0.8)}, 0 0 100px ${hexToRgba(phaseStyles[currentPhase].accent, 0.4)}`,
-      `0 0 0px ${hexToRgba(phaseStyles[currentPhase].accent, 0)}`
-    ],
-    borderColor: [
-      phaseStyles[currentPhase].accent + '00',
-      phaseStyles[currentPhase].accent + '60',  // Opacità ridotta da FF a 60
-      phaseStyles[currentPhase].accent + '00'
+      `0 0 0px ${hexToRgba(simpleMode ? getSimpleModeStyle().accent : phaseStyles[currentPhase].accent, 0)}`,
+      `0 0 60px ${hexToRgba(simpleMode ? getSimpleModeStyle().accent : phaseStyles[currentPhase].accent, 0.8)}, 0 0 100px ${hexToRgba(simpleMode ? getSimpleModeStyle().accent : phaseStyles[currentPhase].accent, 0.4)}`,
+      `0 0 0px ${hexToRgba(simpleMode ? getSimpleModeStyle().accent : phaseStyles[currentPhase].accent, 0)}`
     ]
   }}
   transition={{ duration: 0.15, ease: "easeOut" }}
-  className="absolute inset-0 rounded-full border-[10px] blur-[2px]"  // Aggiunto blur
+  className="absolute inset-0 rounded-full"
   style={{ zIndex: 1 }}
 />
 
-{/* Effetto Glow diffuso extra - AGGIUNGI QUESTO */}
+{/* Effetto Glow diffuso extra */}
 <motion.div
   key={`glow-${beatFlash}`}
   initial={{ opacity: 0 }}
@@ -1290,17 +1436,20 @@ const handleInstallClick = async () => {
   transition={{ duration: 0.15, ease: "easeOut" }}
   className="absolute inset-0 rounded-full"
   style={{
-    background: `radial-gradient(circle, ${phaseStyles[currentPhase].accent} 0%, transparent 70%)`,
+    background: `radial-gradient(circle, ${simpleMode ? getSimpleModeStyle().accent : phaseStyles[currentPhase].accent} 0%, transparent 70%)`,
     zIndex: 0
   }}
 />
                                         <div className="relative text-center">
-                                        <div className="text-[4.85rem] font-semibold" style={{ color: phaseStyles[currentPhase].accent }}>{getCurrentBPM()}</div>
+  <div className="text-[4.85rem] font-semibold" style={{ 
+    color: simpleMode ? getSimpleModeStyle().accent : phaseStyles[currentPhase].accent,
+    transition: 'color 1s ease-in-out'
+  }}>{getCurrentBPM()}</div>
                                         <div className="text-sm uppercase tracking-[0.4em] text-neutral-400">BPM</div>
                                         </div>
                                     </div>
 
-                                    <div className="space-y-6 text-left">
+                                   <div className={`space-y-6 ${simpleMode ? 'text-center w-full max-w-md' : 'text-left'}`}>
     <div>
     {!simpleMode && (
       <>
@@ -1311,11 +1460,13 @@ const handleInstallClick = async () => {
       </>
     )}
     {simpleMode && (
-      <>
-        <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">METRONOMO</span>
-        <h2 className="mt-3 text-3xl font-semibold text-blue-300">
-            {t.simpleMode}
-        </h2>
+  <>
+    <span className="text-xs uppercase tracking-[0.4em] text-neutral-500">METRONOMO</span>
+    <h2 className="mt-3 text-3xl font-semibold transition-colors duration-1000" style={{ 
+      color: getSimpleModeStyle().textColor 
+    }}>
+        {t.simpleMode}
+    </h2>
       </>
     )}
                                        <p className="mt-2 text-sm text-neutral-400">
@@ -1753,6 +1904,7 @@ initial="hidden"        // <--- ASSICURATI CHE CI SIANO QUESTI
                                 <RefreshCcw size={16} className="text-neutral-500" />
                                 {t.resetDefaults}
                             </button>
+
                             <div className="text-center text-[11px] uppercase tracking-[0.3em] text-neutral-500">
   {isRunning && !isPaused ? t.cannotModify : t.allChanges}
 </div>
@@ -1765,6 +1917,56 @@ initial="hidden"        // <--- ASSICURATI CHE CI SIANO QUESTI
                     )}
                     </AnimatePresence>
                 </motion.div>
+<div className="space-y-3">
+  <div className="text-xs uppercase tracking-[0.35em] text-neutral-500 text-center">
+    {language === 'it' ? 'Condividi Settaggi' : 'Share Settings'}
+  </div>
+  <div className="flex gap-2">
+    {/* WhatsApp */}
+    <button
+      onClick={() => {
+        const url = encodeURIComponent(window.location.href);
+        const text = encodeURIComponent(language === 'it' ? 'Guarda questi settaggi ABCD!' : 'Check out these ABCD settings!');
+        window.open(`https://wa.me/?text=${text}%20${url}`, '_blank');
+      }}
+      className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-green-400/20 bg-green-500/10 px-3 py-2 text-sm font-semibold text-green-300 transition hover:border-green-400/40 hover:bg-green-500/20"
+      title="WhatsApp"
+    >
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+      </svg>
+    </button>
+
+    {/* Facebook */}
+<button
+  onClick={() => {
+    const url = encodeURIComponent(window.location.href);
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
+  }}
+  className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-blue-400/20 bg-blue-500/10 px-3 py-2 text-sm font-semibold text-blue-300 transition hover:border-blue-400/40 hover:bg-blue-500/20"
+  title="Facebook"
+>
+  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+  </svg>
+</button>
+
+    {/* Copia Link */}
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(window.location.href);
+        alert(language === 'it' ? 'Link copiato!' : 'Link copied!');
+      }}
+      className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/20"
+      title={language === 'it' ? 'Copia Link' : 'Copy Link'}
+    >
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+      </svg>
+    </button>
+  </div>
+</div>
+
 
                 {/* 6. INFO & ISTRUZIONI: order-6 (Mobile) / lg:order-4 (Desktop) */}
                 <motion.div
