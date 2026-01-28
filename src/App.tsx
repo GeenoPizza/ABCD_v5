@@ -262,6 +262,9 @@ const ABCDMetronome = () => {
   const [audioError, setAudioError] = useState<string | null>(null);
   const [volume, setVolume] = useState(0.85);
   const [language, setLanguage] = useState<'it' | 'en'>('it');
+
+const [exerciseTitle, setExerciseTitle] = useState<string>('');
+
 const [bgPhaseColor, setBgPhaseColor] = useState<PhaseKey>('A');
 const [simpleMode, setSimpleMode] = useState(false);
   const t = translations[language];
@@ -1049,6 +1052,12 @@ useEffect(() => {
   if (urlSub && ['quarter', 'eighth', 'triplet', 'sixteenth'].includes(urlSub)) {
     setSubdivision(urlSub as typeof subdivision);
   }
+
+const title = params.get('title');
+if (title) {
+  setExerciseTitle(title);
+}
+
   if (urlDurations) {
     const [a, b, c, d] = urlDurations.split(',').map(Number);
     if (a && b && c && d) setPhaseDurations({ A: a, B: b, C: c, D: d });
@@ -1072,11 +1081,14 @@ useEffect(() => {
     params.set('perc', `${phasePercentages.A},${phasePercentages.B},${phasePercentages.C}`);
     params.set('lang', language);
     
+    if (exerciseTitle.trim()) {
+      params.set('title', exerciseTitle);
+    }
+    
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
   }
-}, [targetBPM, subdivision, phaseDurations, phasePercentages, language, isRunning]);
-
+}, [targetBPM, subdivision, phaseDurations, phasePercentages, language, exerciseTitle, isRunning]);
 const handleInstallClick = async () => {
   if (!deferredPrompt) return;
   
@@ -1266,7 +1278,12 @@ const handleInstallClick = async () => {
         </motion.div>
 
         {/* CONTENITORE PRINCIPALE (GESTISCE L'ORDINE MOBILE E IL LAYOUT DESKTOP COMPATTO) */}
-        <motion.div
+{exerciseTitle && (
+  <h2 className="text-center text-2xl font-bold mb-6 text-white">
+    {exerciseTitle}
+  </h2>
+)}      
+  <motion.div
     className="mt-14 flex flex-col gap-8 items-center lg:flex-row lg:justify-between lg:items-start" 
     variants={staggerParent}
     initial="hidden"
@@ -1919,10 +1936,18 @@ initial="hidden"        // <--- ASSICURATI CHE CI SIANO QUESTI
                     </AnimatePresence>
                 </motion.div>
 <div className="space-y-3">
+
   <div className="text-xs uppercase tracking-[0.35em] text-neutral-500 text-center">
     {language === 'it' ? 'Condividi Settaggi' : 'Share Settings'}
   </div>
   <div className="flex gap-2">
+<input
+  type="text"
+  value={exerciseTitle}
+  onChange={(e) => setExerciseTitle(e.target.value)}
+  placeholder={language === 'it' ? 'Titolo esercizio (opzionale)' : 'Exercise title (optional)'}
+  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-white placeholder-neutral-500"
+/>
     {/* WhatsApp */}
     <button
       onClick={() => {
